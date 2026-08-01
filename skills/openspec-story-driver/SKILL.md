@@ -35,13 +35,13 @@ Add to your opencode config (e.g. `opencode.json` or `~/.config/opencode/opencod
     "neo4j": {
       "type": "local",
       "command": [
-        "npx",
-        "-y",
-        "@neo4j/mcp-server",
-        "--uri", "bolt://localhost:7687",
-        "--database", "neo4j",
-        "--username", "neo4j",
-        "--password", "storypass"
+        "docker", "run", "-i", "--rm",
+        "-e", "NEO4J_URI=bolt://localhost:7687",
+        "-e", "NEO4J_USERNAME=neo4j",
+        "-e", "NEO4J_PASSWORD=storypass",
+        "-e", "NEO4J_DATABASE=neo4j",
+        "-e", "NEO4J_TRANSPORT=stdio",
+        "mcp/neo4j-cypher:latest"
       ]
     }
   }
@@ -51,7 +51,7 @@ Add to your opencode config (e.g. `opencode.json` or `~/.config/opencode/opencod
 Restart opencode after adding the MCP server. All graph access in this skill goes through the `neo4j` MCP server's Cypher execution tool — never shell out to a driver.
 
 ### Helper script
-`story-driver.py` (in the repo scripts/ directory) performs the mechanical parts: parsing tasks, validating the story definition, generating `stories.md` and `story-seed.cypher`, toggling task checkboxes, and appending state. Run it as `python3 <repo>/scripts/story-driver.py <command> ...`.
+`story_driver.clj` (in the repo scripts/ directory) performs the mechanical parts: parsing tasks, validating the story definition, generating `stories.md` and `story-seed.cypher`, toggling task checkboxes, and appending state. Run it as `bb <repo>/scripts/story_driver.clj <command> ...`.
 
 ## Workflow
 
@@ -72,7 +72,7 @@ Read the change's context: `proposal.md`, `design.md`, `specs/**`, and `tasks.md
 1. Parse tasks so none are missed:
    ```bash
    openspec status --change "<name>" --json
-   python3 <repo>/scripts/story-driver.py parse-tasks openspec/changes/<name>/tasks.md
+   bb <repo>/scripts/story_driver.clj parse-tasks openspec/changes/<name>/tasks.md
    ```
 2. Write `<changeRoot>/stories.yaml` following the **Zero-Assumption Story Template** below. Group related tasks into stories; each story maps to the task descriptions it covers via `taskRefs`. Combined, `taskRefs` must cover every task exactly once (no orphans, no extras).
 3. Every story MUST satisfy the completeness checklist:
@@ -84,7 +84,7 @@ Read the change's context: `proposal.md`, `design.md`, `specs/**`, and `tasks.md
 5. If a task set needs more than 3 acceptance criteria, split it into multiple stories.
 6. Validate and generate:
    ```bash
-   python3 <repo>/scripts/story-driver.py generate "<name>" --root <changeRoot>
+   bb <repo>/scripts/story_driver.clj generate "<name>" --root <changeRoot>
    ```
    This writes `stories.md` (human-readable review copy) and `story-seed.cypher` (idempotent MERGE seed). Fix any validation errors it reports.
 7. Show the user `stories.md` for review before seeding. Pause for approval.
@@ -157,11 +157,11 @@ Repeat until complete or blocked:
    ```
    Then sync the task checkboxes:
    ```bash
-   python3 <repo>/scripts/story-driver.py sync-tasks "<name>" "<story-id>" --root <changeRoot>
+   bb <repo>/scripts/story_driver.clj sync-tasks "<name>" "<story-id>" --root <changeRoot>
    ```
    And append a compact summary:
    ```bash
-   python3 <repo>/scripts/story-driver.py append-state "<name>" "<story-id>: <one-line summary of what changed and key decisions>" --root <changeRoot>
+   bb <repo>/scripts/story_driver.clj append-state "<name>" "<story-id>: <one-line summary of what changed and key decisions>" --root <changeRoot>
    ```
 7. **Compact context.** You are about to move to a new story. Compress the current session context (drop implementation details that are recorded in `.story-state.md`). Before polling the next story, reload the state summary from `<changeRoot>/.story-state.md`.
 8. **Confirm with the user** before starting the next story. Report what completed and what is next. If the user says continue, return to step 1; otherwise stop here.

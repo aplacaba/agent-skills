@@ -27,4 +27,4 @@ The repo is distributed via thin per-harness adapters that reference the canonic
 
 - **Tool permissions**: canonical content no longer declares `allowed-tools:` frontmatter. Each harness applies its own permission rules at install time. For opencode, permissions live in `permission` config (project or global).
 - **`openspec` CLI**: all canonical content invokes the `openspec` CLI the same way across harnesses (`openspec status --change ...` etc.). Install the CLI once per machine.
-- **story-driver.py**: referenced as `<repo>/scripts/story-driver.py`. Requires Python 3 with PyYAML. Path is repo-relative, so clone the repo at a known location per machine (see the setup script / install docs).
+- **story-driver**: referenced as `bb <repo>/scripts/story_driver.clj`. Requires babashka (`bb`). Path is repo-relative, so clone the repo at a known location per machine (see the setup script / install docs).

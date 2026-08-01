@@ -4,9 +4,9 @@ This repo provides the OpenSpec agent tooling: openspec workflow skills, the sto
 
 ## Prerequisites
 
-- Python 3 with PyYAML (`pip3 install pyyaml`)
+- Babashka (`bb`) — tested minimum: **v1.13.219** (install: `curl -sLO https://raw.githubusercontent.com/babashka/babashka/master/install && chmod +x install && ./install`)
 - OpenSpec CLI (`npm i -g openspec`)
-- Node.js (for the Neo4j MCP server via `npx`)
+- Docker (for the Neo4j MCP server via the `mcp/neo4j-cypher:latest` image)
 - Git
 - A running Neo4j instance (or the connection details to your deployed one)
 

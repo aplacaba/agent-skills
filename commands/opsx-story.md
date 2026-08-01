@@ -14,7 +14,7 @@ Load and follow the `openspec-story-driver` skill for the full workflow.
 
 1. **Select the change** and announce: "Using change: <name>" (override with `/opsx-story <other>`).
 2. **Verify MCP availability** — execute `RETURN 1 AS ok` through the Neo4j MCP Cypher tool. If unreachable, print the setup guidance (Docker command + opencode MCP config) and stop.
-3. **Decompose** — read `proposal.md`, `design.md`, `specs/**`, and `tasks.md`; write `stories.yaml`; run `story-driver.py generate` to produce `stories.md` and `story-seed.cypher`; show the user `stories.md` for review.
+3. **Decompose** — read `proposal.md`, `design.md`, `specs/**`, and `tasks.md`; write `stories.yaml`; run `bb <repo>/scripts/story_driver.clj generate` to produce `stories.md` and `story-seed.cypher`; show the user `stories.md` for review.
 4. **Seed** — skip if a run is in progress; otherwise run `story-seed.cypher` via MCP.
 5. **Loop** — poll for the next runnable story, implement it, mark it done, sync tasks, append state, compact context, confirm with the user, repeat.
 6. **Finish** — report blocked stories and stop, or on completion suggest archive.
