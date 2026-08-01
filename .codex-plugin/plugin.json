@@ -1,0 +1,19 @@
+{
+  "name": "openspec-tooling",
+  "version": "0.1.0",
+  "description": "OpenSpec agent tooling: openspec workflow skills, story-driven apply backed by a Neo4j story graph, and the openspec change reviewer agent.",
+  "author": {
+    "name": "tovarisch"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/tovarisch/my-agent-skill",
+  "keywords": [
+    "openspec",
+    "spec-driven",
+    "skills",
+    "workflow",
+    "neo4j",
+    "story-driven"
+  ],
+  "skills": "./skills/"
+}
