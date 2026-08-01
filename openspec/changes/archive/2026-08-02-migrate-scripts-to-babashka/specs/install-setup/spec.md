@@ -1,24 +1,4 @@
-# install-setup
-
-## Purpose
-
-Installs the canonical tooling into the global opencode config via a single idempotent `setup.sh`, checks prerequisites, symlinks skills/commands/agents/plugin, and merges the Neo4j MCP config from environment variables.
-
-## Requirements
-
-### Requirement: Single-command global install for opencode
-
-The install-setup capability SHALL provide a `setup.sh` script at the repo root that installs the canonical tooling into the global opencode config (`~/.config/opencode/`) with a single invocation. The script SHALL symlink skills, commands, agents, and the opencode plugin into their global opencode directories.
-
-#### Scenario: Fresh machine install
-
-- **WHEN** `./setup.sh` is run on a machine without existing opencode tooling
-- **THEN** all canonical skills, commands, agents, and the plugin become discoverable in opencode globally
-
-#### Scenario: Re-running setup is safe
-
-- **WHEN** `./setup.sh` is run a second time
-- **THEN** no duplicate or broken symlinks are created and no unrelated config is changed
+## MODIFIED Requirements
 
 ### Requirement: Prerequisite validation
 
