@@ -10,9 +10,6 @@ set -euo pipefail
 # a backup of opencode.json(.c) is written before any edit.
 # ---------------------------------------------------------------------------
 
-# Resolve the repo root portably (BSD vs GNU readlink differ; use Python).
-REPO_ROOT="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$(dirname "${BASH_SOURCE[0]}")")"
-
 # Allow overriding the global opencode config dir for testing.
 OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 
@@ -36,22 +33,19 @@ check_cmd() {
   return 1
 }
 
-check_cmd python3 "install Python 3 (https://python.org)" || missing_hard=1
+check_cmd bb     "install babashka (https://babashka.org)" || missing_hard=1
 check_cmd openspec "install via: npm i -g openspec" || missing_hard=1
-check_cmd node    "install Node.js (https://nodejs.org)" || missing_hard=1
+check_cmd docker  "install Docker (https://docs.docker.com/get-docker/)" || missing_hard=1
 check_cmd git     "install git (https://git-scm.com)" || missing_hard=1
-
-if command -v python3 >/dev/null 2>&1; then
-  if python3 -c 'import yaml' >/dev/null 2>&1; then
-    say "  [ok] PyYAML"
-  else
-    warn "  [missing] PyYAML — install via: pip3 install pyyaml"
-  fi
-fi
 
 if [ "$missing_hard" -eq 1 ]; then
   err "hard prerequisites are missing; install them and re-run ./setup.sh"
 fi
+
+# Resolve the repo root portably (BSD vs GNU readlink differ; use babashka).
+# Done after the prerequisite gate so a missing bb produces the install hint
+# instead of failing under `set -e`.
+REPO_ROOT="$(bb -e '(require (quote [babashka.fs :as fs])) (println (str (fs/canonicalize (first *command-line-args*))))' "$(dirname "${BASH_SOURCE[0]}")")"
 
 # ---------------------------------------------------------------------------
 # 2. Idempotent symlinking into the global opencode config
@@ -109,144 +103,7 @@ else
   NEO4J_USER="${NEO4J_USER:-neo4j}" \
   NEO4J_PASSWORD="$NEO4J_PASSWORD" \
   OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" \
-  python3 <<'PYEOF'
-import json
-import os
-import re
-import shutil
-import sys
-
-
-def strip_jsonc(text):
-    """Remove // and /* */ comments, preserving string contents."""
-    out = []
-    i, n = 0, len(text)
-    in_str = False
-    while i < n:
-        c = text[i]
-        nxt = text[i + 1] if i + 1 < n else ""
-        if in_str:
-            out.append(c)
-            if c == "\\":
-                if i + 1 < n:
-                    out.append(nxt)
-                    i += 2
-                    continue
-            if c == '"':
-                in_str = False
-            i += 1
-            continue
-        if c == '"':
-            in_str = True
-            out.append(c)
-            i += 1
-            continue
-        if c == "/" and nxt == "/":
-            while i < n and text[i] != "\n":
-                i += 1
-            continue
-        if c == "/" and nxt == "*":
-            i += 2
-            while i < n and not (text[i] == "*" and i + 1 < n and text[i + 1] == "/"):
-                i += 1
-            i = min(i + 2, n)
-            continue
-        out.append(c)
-        i += 1
-    return "".join(out)
-
-
-def remove_trailing_commas(text):
-    """Drop commas directly before } or ] (JSONC), preserving strings."""
-    out = []
-    i, n = 0, len(text)
-    in_str = False
-    while i < n:
-        c = text[i]
-        if in_str:
-            out.append(c)
-            if c == "\\":
-                if i + 1 < n:
-                    out.append(text[i + 1])
-                    i += 2
-                    continue
-            if c == '"':
-                in_str = False
-            i += 1
-            continue
-        if c == '"':
-            in_str = True
-            out.append(c)
-            i += 1
-            continue
-        if c == ",":
-            j = i + 1
-            while j < n and text[j] in " \t\r\n":
-                j += 1
-            if j < n and text[j] in "}]":
-                i = j
-                continue
-        out.append(c)
-        i += 1
-    return "".join(out)
-
-
-def find_config(config_dir):
-    for name in ("opencode.json", "opencode.jsonc"):
-        cand = os.path.join(config_dir, name)
-        if os.path.exists(cand):
-            return cand
-    return os.path.join(config_dir, "opencode.json")
-
-
-def main():
-    cfg_dir = os.environ["OPENCODE_CONFIG_DIR"]
-    uri = os.environ["NEO4J_URI"]
-    user = os.environ["NEO4J_USER"]
-    pwd = os.environ["NEO4J_PASSWORD"]
-
-    path = find_config(cfg_dir)
-    if os.path.exists(path):
-        raw = open(path).read()
-        try:
-            data = json.loads(remove_trailing_commas(strip_jsonc(raw)))
-        except Exception as exc:  # noqa: BLE001
-            sys.exit(f"could not parse {path}: {exc}")
-    else:
-        data = {"$schema": "https://opencode.ai/config.json"}
-
-    if "neo4j" in data.get("mcp", {}):
-        print(f"  mcp.neo4j already present in {path} — leaving unchanged")
-        return
-
-    backup = path + ".bak"
-    if os.path.exists(path):
-        shutil.copy2(path, backup)
-        print(f"  backup written: {backup}")
-
-    data.setdefault("$schema", "https://opencode.ai/config.json")
-    data.setdefault("mcp", {})
-    data["mcp"]["neo4j"] = {
-        "type": "local",
-        "command": [
-            "npx",
-            "-y",
-            "@neo4j/mcp-server",
-            "--uri", uri,
-            "--database", "neo4j",
-            "--username", user,
-            "--password", pwd,
-        ],
-    }
-
-    with open(path, "w") as f:
-        json.dump(data, f, indent=2)
-        f.write("\n")
-    print(f"  merged mcp.neo4j into {path}")
-
-
-main()
-PYEOF
+  bb "$REPO_ROOT/scripts/config-merge.clj"
 fi
 
 # ---------------------------------------------------------------------------
