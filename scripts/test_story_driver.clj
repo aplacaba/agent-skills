@@ -26,6 +26,7 @@
   (testing "generate produces byte-identical stories.md and story-seed.cypher"
     (let [d (tmp-root)
           r (run "generate" "fixture-change"
+                 "--project" "fixture-project"
                  "--root" (str d "/change-root")
                  "--def" (str d "/change-root/stories.yaml"))]
       (is (= 0 (:exit r)))
@@ -78,12 +79,12 @@
 
 (defn gen-with-def [d name content]
   (write-def! d name content)
-  (run "generate" "c" "--root" (str d "/change-root") "--def" (str d "/" name)))
+  (run "generate" "c" "--project" "proj" "--root" (str d "/change-root") "--def" (str d "/" name)))
 
 (deftest validation-errors-file-level
   (testing "missing definition file"
     (let [d (tmp-root)
-          r (run "generate" "c" "--root" (str d "/change-root")
+          r (run "generate" "c" "--project" "proj" "--root" (str d "/change-root")
                  "--def" (str d "/nope.yaml"))]
       (is (= 1 (:exit r)))
       (is (str/includes? (:err r) "error: story definition not found: "))))
@@ -167,7 +168,7 @@
         (is (str/includes? (:err r) "error: story 'a' taskRef not found in tasks.md: 'ghost task'"))))
     (testing "tasks.md absent"
       (let [d (str (fs/create-temp-dir))
-            r (run "generate" "c" "--root" d "--def" (str d "/bad.yaml"))]
+            r (run "generate" "c" "--project" "proj" "--root" d "--def" (str d "/bad.yaml"))]
         (is (= 1 (:exit r)))
         (is (str/includes? (:err r) "error: tasks.md not found: "))))
     (testing "tasks not covered by any story"
@@ -219,6 +220,52 @@
     (let [r (run "generate" "foo" "--root")]
       (is (= 2 (:exit r)))
       (is (str/includes? (:err r) "argument --root: expected one argument")))))
+
+(deftest project-flag-parsing
+  (testing "generate without --project exits 2 with required-flag message"
+    (let [r (run "generate" "foo" "--root" "/tmp/x")]
+      (is (= 2 (:exit r)))
+      (is (str/includes? (:err r) "the following arguments are required: --project"))))
+  (testing "--project with no value exits 2 with expected-one-argument"
+    (let [r (run "generate" "foo" "--project")]
+      (is (= 2 (:exit r)))
+      (is (str/includes? (:err r) "argument --project: expected one argument"))))
+  (testing "--project followed by another flag exits 2 with expected-one-argument"
+    (let [r (run "generate" "foo" "--project" "--root" "/tmp/x")]
+      (is (= 2 (:exit r)))
+      (is (str/includes? (:err r) "argument --project: expected one argument"))))
+  (testing "--project rejected on parse-tasks"
+    (let [r (run "parse-tasks" "foo" "--project" "p")]
+      (is (= 2 (:exit r)))
+      (is (str/includes? (:err r) "unrecognized arguments: --project"))))
+  (testing "--project rejected on sync-tasks"
+    (let [r (run "sync-tasks" "c" "s" "--project" "p")]
+      (is (= 2 (:exit r)))
+      (is (str/includes? (:err r) "unrecognized arguments: --project"))))
+  (testing "--project rejected on append-state"
+    (let [r (run "append-state" "c" "t" "--project" "p")]
+      (is (= 2 (:exit r)))
+      (is (str/includes? (:err r) "unrecognized arguments: --project")))))
+
+(deftest seed-shape
+  (testing "emitted seed contains project-scoped statements"
+    (let [d (tmp-root)
+          r (run "generate" "fixture-change"
+                 "--project" "fixture-project"
+                 "--root" (str d "/change-root")
+                 "--def" (str d "/change-root/stories.yaml"))
+          seed (file->str (str d "/change-root/story-seed.cypher"))]
+      (is (= 0 (:exit r)))
+      (is (str/includes? seed "MERGE (p:Project {name: \"fixture-project\"})"))
+      (is (str/includes? seed "MERGE (c:Change {name: \"fixture-change\", project: \"fixture-project\"})"))
+      (is (str/includes? seed "MERGE (p)-[:BELONGS_TO]->(c)"))
+      (is (str/includes? seed "MERGE (s:Story {id: \"scaffold\", change: \"fixture-change\", project: \"fixture-project\"})"))
+      (is (str/includes? seed "MERGE (s:Story {id: \"core\", change: \"fixture-change\", project: \"fixture-project\"})"))
+      (is (str/includes? seed "MATCH (c:Change {name: \"fixture-change\", project: \"fixture-project\"}),"))
+      (is (str/includes? seed "MATCH (a:Story {id: \"core\", change: \"fixture-change\", project: \"fixture-project\"})"))
+      (is (str/includes? seed "MATCH (b:Story {id: \"scaffold\", change: \"fixture-change\", project: \"fixture-project\"})"))
+      (is (str/includes? seed "MERGE (a)-[:DEPENDS_ON]->(b)"))
+      (is (str/includes? seed "// project: \"fixture-project\"")))))
 
 (deftest help-behavior
   (testing "root help exits 0 and prints to stdout"

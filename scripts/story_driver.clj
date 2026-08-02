@@ -211,31 +211,43 @@ Subcommands:
       (swap! lines conj ""))
     (spit (str root "/stories.md") (str/join "\n" @lines) :encoding "UTF-8")))
 
-(defn write-seed [stories change root]
+(defn write-seed [stories change project root]
   (let [parts (atom [(str "// Story graph seed for change")
                      (str "// change: " (cypher-str change))
+                     (str "// project: " (cypher-str project))
                      "// Idempotent: each statement uses MERGE; safe to re-run."
-                     (str "MERGE (c:Change {name: " (cypher-str change) "});")])]
+                     (str "MERGE (p:Project {name: " (cypher-str project) "});")
+                     (str "MERGE (c:Change {name: " (cypher-str change)
+                          ", project: " (cypher-str project) "});")
+                     (str "MATCH (p:Project {name: " (cypher-str project) "}),")
+                     (str "      (c:Change {name: " (cypher-str change)
+                          ", project: " (cypher-str project) "})")
+                     "MERGE (p)-[:BELONGS_TO]->(c);"])]
     (doseq [s stories]
       (swap! parts conj "")
       (swap! parts conj (str "MERGE (s:Story {id: " (cypher-str (:id s))
-                             ", change: " (cypher-str change) "})"))
+                             ", change: " (cypher-str change)
+                             ", project: " (cypher-str project) "})"))
       (swap! parts conj (str "ON CREATE SET s.title = " (cypher-str (:title s))
                              ", s.description = " (cypher-str (str/trim (:description s)))
                              ", s.acceptanceCriteria = " (cypher-arr (:acceptanceCriteria s))
                              ", s.taskRefs = " (cypher-arr (:taskRefs s))
                              ", s.status = \"pending\";"))
-      (swap! parts conj (str "MATCH (c:Change {name: " (cypher-str change) "}),"))
+      (swap! parts conj (str "MATCH (c:Change {name: " (cypher-str change)
+                             ", project: " (cypher-str project) "}),"))
       (swap! parts conj (str "      (s:Story {id: " (cypher-str (:id s))
-                             ", change: " (cypher-str change) "})"))
+                             ", change: " (cypher-str change)
+                             ", project: " (cypher-str project) "})"))
       (swap! parts conj "MERGE (c)-[:HAS_STORY]->(s);"))
     (doseq [s stories]
       (doseq [dep (:dependsOn s)]
         (swap! parts conj "")
         (swap! parts conj (str "MATCH (a:Story {id: " (cypher-str (:id s))
-                               ", change: " (cypher-str change) "})"))
+                               ", change: " (cypher-str change)
+                               ", project: " (cypher-str project) "})"))
         (swap! parts conj (str "MATCH (b:Story {id: " (cypher-str dep)
-                               ", change: " (cypher-str change) "})"))
+                               ", change: " (cypher-str change)
+                               ", project: " (cypher-str project) "})"))
         (swap! parts conj "MERGE (a)-[:DEPENDS_ON]->(b);")))
     (spit (str root "/story-seed.cypher") (str/join "\n" @parts) :encoding "UTF-8")))
 
@@ -283,7 +295,7 @@ Subcommands:
 
 (def sub-usage
   {"parse-tasks"  (str "usage: " prog " parse-tasks [-h] tasks [--json]")
-   "generate"     (str "usage: " prog " generate [-h] change [--root ROOT] [--def DEF]")
+   "generate"     (str "usage: " prog " generate [-h] change [--root ROOT] [--def DEF] --project PROJECT")
    "sync-tasks"   (str "usage: " prog " sync-tasks [-h] change story_id [--root ROOT] [--def DEF]")
    "append-state" (str "usage: " prog " append-state [-h] change text [--root ROOT]")})
 
@@ -299,9 +311,9 @@ Subcommands:
        "Subcommands:\n"
        "  parse-tasks <tasks.md> [--json]\n"
        "      Parse an OpenSpec tasks.md into a structured list of task groups/tasks.\n"
-       "  generate <change> [--root <changeRoot>] [--def <stories.yaml>]\n"
+       "  generate <change> [--root <changeRoot>] [--def <stories.yaml>] --project <name>\n"
        "      Read a story definition, validate it, and write stories.md +\n"
-       "      story-seed.cypher into the change root.\n"
+       "      story-seed.cypher into the change root (scoped to the project).\n"
        "  sync-tasks <change> <storyId> [--root <changeRoot>] [--def <stories.yaml>]\n"
        "      Mark the tasks referenced by a story as done in tasks.md.\n"
        "  append-state <change> <text> [--root <changeRoot>]\n"
@@ -321,11 +333,12 @@ Subcommands:
 (defn parse-args [sub args]
   "Parse per-subcommand args. Returns {:positionals [...] :opts {...}} or exits with usage."
   (let [spec {"parse-tasks"  {:flags #{:json} :positionals ["tasks"] :npos 1}
-              "generate"     {:flags #{:root :def} :positionals ["change"] :npos 1}
+              "generate"     {:flags #{:root :def :project} :positionals ["change"] :npos 1}
               "sync-tasks"   {:flags #{:root :def} :positionals ["change" "story_id"] :npos 2}
               "append-state" {:flags #{:root} :positionals ["change" "text"] :npos 2}}
         {:keys [flags positionals npos]} (spec sub)
-        flag-tokens {"--json" :json "--root" :root "--def" :def}]
+        flag-tokens {"--json" :json "--root" :root "--def" :def "--project" :project}
+        required-flags {"generate" #{:project}}]
     (loop [toks args, pos [], opts {}]
       (if (empty? toks)
         (do
@@ -336,6 +349,11 @@ Subcommands:
           (when (> (count pos) npos)
             (die-usage (sub-usage sub)
                        (str "unrecognized arguments: " (str/join " " (drop npos pos)))))
+          (let [missing (remove #(contains? opts %) (required-flags sub))]
+            (when (seq missing)
+              (die-usage (sub-usage sub)
+                         (str "the following arguments are required: "
+                              (str/join ", " (map #(str "--" (name %)) missing))))))
           {:positionals pos :opts opts})
         (let [tok (first toks)
               more (rest toks)]
@@ -347,7 +365,7 @@ Subcommands:
               (if (contains? flags k)
                 (if (= k :json)
                   (recur more pos (assoc opts k true))
-                  (if (empty? more)
+                  (if (or (empty? more) (str/starts-with? (second toks) "-"))
                     (die-usage (sub-usage sub)
                                (str "argument " tok ": expected one argument"))
                     (recur (nnext toks) pos (assoc opts k (second toks)))))
@@ -379,6 +397,7 @@ Subcommands:
 (defn cmd-generate [args]
   (let [{:keys [positionals opts]} (parse-args "generate" args)
         change (first positionals)
+        project (:project opts)
         root (default-change-root change (:root opts))
         def-path (:def opts)
         def-path (if def-path def-path (str root "/stories.yaml"))
@@ -389,7 +408,7 @@ Subcommands:
           stories (load-stories def-path change)]
       (validate-stories stories tasks)
       (write-stories-md stories change root)
-      (write-seed stories change root)
+      (write-seed stories change project root)
       (println (str "wrote " root "/stories.md"))
       (println (str "wrote " root "/story-seed.cypher")))))
 
