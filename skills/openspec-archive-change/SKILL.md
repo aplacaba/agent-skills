@@ -49,7 +49,11 @@ The post-ops is resumable: a re-run determines its starting point from the repos
 5. **Remove the worktree** (final cleanup, from the main checkout) — `git worktree remove <path>`; it refuses on a dirty tree. This runs only after commit, push, and pull-request resolution (created, found, or explicitly handed off for manual follow-up). A refusal is non-blocking: warn, report the handoff as complete, and leave the worktree for the user or a later re-run. The branch refs (local and remote) are never deleted by the archive flow; they remain until the pull request merges.
 6. **Report** — report the pull request URL and status, and remind the user that merging happens through the pull request.
 
-(Resume dispatch is defined below.)
+**Resume dispatch (for an already-moved archive destination):**
+
+- When the archive flow is invoked with an already-moved archive destination (recorded in the durable state file, or a change name resolving to exactly one archive directory), SKIP the pre-move checks and the artifact/task/sync checks, and enter the post-ops directly (step 0). A change name resolving to multiple archive directories without an explicit destination stops and asks the user to pick the exact destination.
+- Revalidate the durable pins before any remote-touching step: the remote name still exists; the effective push endpoint list still matches (canonical identities or fingerprints); the base repository identity still matches; and a FRESH default-branch resolution still matches the recorded base. On any mismatch, stop and offer the user: (a) keep the old pins, (b) accept the current configuration as the new pins (user-authorized repin — record them before any remote operation resumes), or (c) abort. Only user-authorized repins replace recorded pins.
+- A failed post-ops leaves the worktree and state file in place; a re-run locates state (post-ops step 1) and continues from there.
 
 **Steps**
 
