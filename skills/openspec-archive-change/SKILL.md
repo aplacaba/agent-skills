@@ -15,6 +15,28 @@ Archive a completed change in the experimental workflow.
 
 **Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
 
+**Worktree convention and post-ops**
+
+This skill follows the worktree-per-change convention using the shared git helpers defined in the propose skill (convention detection, shared preflight, ensure-worktree). When the convention is inactive, warn once and skip all git steps — the archive still completes. All change work (including the archive move) happens inside the worktree `.worktrees/<name>/`; paths are relative to the worktree root.
+
+**Pre-move checks (before the archive move):**
+
+1. Run the shared preflight (main checkout always; change worktree when it exists).
+2. Run ensure-worktree — the worktree must exist and be on exactly `change/<name>`.
+3. Record the durable post-ops state BEFORE the first remote-touching operation, in a state file under the git common directory (`git rev-parse --git-common-dir`), written atomically (temp file + rename):
+   - the exact archive destination `openspec/changes/archive/YYYY-MM-DD-<name>/`;
+   - the D5 pins: the selected remote name (or the explicit no-remote state), the effective push endpoint list (`git remote get-url --push --all <remote>`; the fetch URL when no push URL is configured), the base repository identity (canonical identity of the fetch endpoint), and the resolved base branch (freshly resolved via `git ls-remote --symref <remote> HEAD`, falling back to local `master`/`main`);
+   - endpoint URLs are reduced to canonical identities (`<lowercase-host>[:port]/<path-segments>`, scheme-agnostic, userinfo/query/fragment stripped) or non-secret SHA-256 fingerprints for unparseable endpoints (e.g. `file://`, local paths) — raw endpoint strings never appear in the state file, reports, or logs.
+
+**Post-ops (resumable git handoff after the move):**
+
+The post-ops is resumable: a re-run determines its starting point from the repository state.
+
+0. **Preflight** — shared preflight (main checkout always; worktree when it exists).
+1. **Locate state** — if the worktree `.worktrees/<name>/` exists, revalidate it (ensure-worktree) and run the post-ops steps below. If it is missing (already removed), verify remote state against every pinned endpoint and the pull-request status on the forge: an open or merged matching pull request means the handoff already finished (report its URL; a merged PR waives branch presence); a branch present at the pushed tip on every endpoint with no matching pull request means the pull request can be opened now; a missing or stale branch on any endpoint without an open/merged pull request is an anomaly — stop and report.
+
+(Subsequent steps — attributable commit, push, pull request, worktree removal — are defined below.)
+
 **Steps**
 
 1. **If no change name provided, prompt for selection**
