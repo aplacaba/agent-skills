@@ -34,8 +34,14 @@ The post-ops is resumable: a re-run determines its starting point from the repos
 
 0. **Preflight** — shared preflight (main checkout always; worktree when it exists).
 1. **Locate state** — if the worktree `.worktrees/<name>/` exists, revalidate it (ensure-worktree) and run the post-ops steps below. If it is missing (already removed), verify remote state against every pinned endpoint and the pull-request status on the forge: an open or merged matching pull request means the handoff already finished (report its URL; a merged PR waives branch presence); a branch present at the pushed tip on every endpoint with no matching pull request means the pull request can be opened now; a missing or stale branch on any endpoint without an open/merged pull request is an anomaly — stop and report.
+2. **Attributable commit** (inside the worktree) — inspect `git status --porcelain`. Attributable paths — the only ones staged without asking:
+   - both sides of the archive move — `openspec/changes/<name>/` (moved-away source, tracked deletions) and `openspec/changes/archive/YYYY-MM-DD-<name>/` (destination) — staged together as a rename, conditional on the source still being tracked: if `git ls-files` reports files under `openspec/changes/<name>/`, run `git add -A <source> <destination>`, otherwise `git add -A <destination>` only (re-run-safe);
+   - the `openspec/specs/<capability>/spec.md` files matching the change's delta capabilities;
+   - the concrete file paths named in the change's `tasks.md` — validated with `git ls-files --error-unmatch` (tracked) or existence (untracked); paths that do not exist are skipped and reported, never passed to `git add`.
+   Any other dirty path triggers a prompt with three continuations: (a) approve — stage it, mark it user-approved in the report; (b) decline — stop the post-ops and report (the archive itself is already complete); (c) exclude — the user commits or stashes it manually, then re-runs. If the tree is clean, skip the commit. Commit with `chore(openspec): archive change <name>` (body explaining why).
+3. **Push** — push `change/<name>` to every effective push endpoint (from the pins), then verify the branch exists at the pushed tip on EVERY pinned endpoint; a verification failure stops the flow before the pull-request step and removal. With no remote configured, skip the push, the pull-request step, and the worktree removal with a warning and report the local state (the worktree stays for the user).
 
-(Subsequent steps — attributable commit, push, pull request, worktree removal — are defined below.)
+(Pull-request step, worktree removal, and resume dispatch are defined below.)
 
 **Steps**
 
