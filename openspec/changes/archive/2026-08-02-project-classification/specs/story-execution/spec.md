@@ -1,24 +1,4 @@
-# story-execution
-
-## Purpose
-
-Drives the story-driven apply loop: polls the Neo4j story graph for the next runnable story, implements it, marks it done, compacts context, and repeats until the change is complete or blocked.
-
-## Requirements
-
-### Requirement: Verify MCP server availability before running
-
-The story-execution capability SHALL verify that the Neo4j MCP server is reachable before starting the loop. If it is not reachable, the capability SHALL print setup guidance (Docker command and opencode MCP configuration) and stop.
-
-#### Scenario: MCP server unreachable
-
-- **WHEN** the story execution loop starts and the Neo4j MCP server cannot be reached
-- **THEN** the loop prints setup guidance and stops without modifying any files
-
-#### Scenario: MCP server reachable
-
-- **WHEN** the story execution loop starts and the Neo4j MCP server responds
-- **THEN** the loop proceeds to the polling step
+## MODIFIED Requirements
 
 ### Requirement: Poll next story from the graph
 
@@ -56,12 +36,3 @@ The story-execution capability SHALL detect when all stories of the change (with
 
 - **WHEN** every story for the change has status `done`
 - **THEN** the loop reports completion and suggests running the archive step
-
-### Requirement: Step with confirmation
-
-The story-execution capability SHALL pause after each completed story and confirm with the user before implementing the next story, rather than running the full loop uninterrupted.
-
-#### Scenario: Confirmation requested
-
-- **WHEN** a story completes and another story is runnable
-- **THEN** the loop reports the result and asks the user to confirm before starting the next story

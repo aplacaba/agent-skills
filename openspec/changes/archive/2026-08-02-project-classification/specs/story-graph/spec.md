@@ -1,10 +1,4 @@
-# story-graph
-
-## Purpose
-
-Stores stories and their dependency edges in a Neo4j database, accessed exclusively through the Neo4j MCP server's Cypher execution tool.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Store story graph in Neo4j via MCP
 
