@@ -24,6 +24,23 @@ When ready to implement, run /opsx-apply
 
 **Input**: The user's request should include a change name (kebab-case) OR a description of what they want to build.
 
+---
+
+**Shared git helpers (defined here, used by the propose, apply, sync, and archive skills)**
+
+These three procedures are the single source of truth for the worktree-per-change git convention. The other skills reference them instead of redefining them.
+
+1. **Convention detection** — the worktree-per-change convention is active only when BOTH hold:
+   - the working directory is a git repository (`git rev-parse` succeeds), and
+   - the repository's root `AGENTS.md` contains the exact heading `## Branching strategy` with the documented `change/<name>` worktree convention.
+   When the convention is inactive, warn once and skip all git steps without failing the workflow. A missing change worktree in a convention-active repository is a workflow violation that stops the phase — never evidence that the convention is inactive.
+
+2. **Shared preflight** — refuse to proceed (stop and report) while any git operation is in progress — an active merge, rebase, cherry-pick, or revert (detected via `MERGE_HEAD`, `rebase-merge`/`rebase-apply`, `CHERRY_PICK_HEAD`, or `REVERT_HEAD` state, or unmerged paths in `git status`). Git-operation state is checkout-specific, so the preflight runs in the main checkout always, and additionally in the change worktree only when that worktree still exists. It runs before every git step in every phase, so a commit can never accidentally complete a pre-existing operation.
+
+3. **Ensure-worktree** — verify the change worktree at `.worktrees/<name>/` exists and is a registered git worktree on exactly branch `change/<name>` using `git worktree list --porcelain` (match the path and its branch). A stale directory at that path, or a worktree on another branch, stops and reports. Only the propose phase creates the worktree; apply, sync, and archive stop and report when it is missing.
+
+---
+
 **Steps**
 
 1. **If no clear input provided, ask what they want to build**
