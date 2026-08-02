@@ -2,7 +2,7 @@
 description: Run a change through the story-driven apply workflow (Neo4j story graph)
 ---
 
-Run an OpenSpec change through the story-driven apply workflow: decompose `tasks.md` into fully-specified stories (max 3 acceptance criteria each) with dependency chains, seed them into a Neo4j story graph via the Neo4j MCP server, then continuously poll for the next runnable story, implement it, compact context, and repeat until complete.
+Run an OpenSpec change through the story-driven apply workflow: decompose `tasks.md` into fully-specified stories (max 3 acceptance criteria each) with dependency chains, classify the project, seed them into a Neo4j story graph via the Neo4j MCP server, then continuously poll for the next runnable story, implement it, compact context, and repeat until complete.
 
 Load and follow the `openspec-story-driver` skill for the full workflow.
 
@@ -14,10 +14,12 @@ Load and follow the `openspec-story-driver` skill for the full workflow.
 
 1. **Select the change** and announce: "Using change: <name>" (override with `/opsx-story <other>`).
 2. **Verify MCP availability** — execute `RETURN 1 AS ok` through the Neo4j MCP Cypher tool. If unreachable, print the setup guidance (Docker command + opencode MCP config) and stop.
-3. **Decompose** — read `proposal.md`, `design.md`, `specs/**`, and `tasks.md`; write `stories.yaml`; run `bb <repo>/scripts/story_driver.clj generate` to produce `stories.md` and `story-seed.cypher`; show the user `stories.md` for review.
-4. **Seed** — skip if a run is in progress; otherwise run `story-seed.cypher` via MCP.
-5. **Loop** — poll for the next runnable story, implement it, mark it done, sync tasks, append state, compact context, confirm with the user, repeat.
-6. **Finish** — report blocked stories and stop, or on completion suggest archive.
+3. **Derive the project name** — derive the canonical project name from the repository's git `origin` per the story-graph classification contract: normalize to lowercase `host/owner/repo` (preserving subgroups; strip scheme/userinfo/port/`.git`/query/fragment), fall back to `local/<repo-directory-name>` when `origin` is absent or unparseable.
+4. **Decompose** — read `proposal.md`, `design.md`, `specs/**`, and `tasks.md`; write `stories.yaml`; run `bb <repo>/scripts/story_driver.clj generate "<name>" --project <project-name> --root <changeRoot>` to produce `stories.md` and `story-seed.cypher`; show the user `stories.md` for review.
+5. **Classify the project** (optional but recommended) — write the `Project` node's classification (`repoUrl`, `techStack`, `type`) via the MCP Cypher tool per the skill's "Classify the project" step.
+6. **Seed** — skip if a run is in progress; otherwise run `story-seed.cypher` via MCP.
+7. **Loop** — poll for the next runnable story, implement it, mark it done, sync tasks, append state, compact context, confirm with the user, repeat.
+8. **Finish** — report blocked stories and stop, or on completion suggest archive.
 
 **Guardrails**
 - Keep going through stories until done or blocked, with user confirmation between stories.

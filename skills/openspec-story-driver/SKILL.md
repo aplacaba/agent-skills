@@ -84,9 +84,9 @@ Read the change's context: `proposal.md`, `design.md`, `specs/**`, and `tasks.md
 5. If a task set needs more than 3 acceptance criteria, split it into multiple stories.
 6. Validate and generate:
    ```bash
-   bb <repo>/scripts/story_driver.clj generate "<name>" --root <changeRoot>
+   bb <repo>/scripts/story_driver.clj generate "<name>" --project <project-name> --root <changeRoot>
    ```
-   This writes `stories.md` (human-readable review copy) and `story-seed.cypher` (idempotent MERGE seed). Fix any validation errors it reports.
+   This writes `stories.md` (human-readable review copy) and `story-seed.cypher` (idempotent MERGE seed scoped to the project). Fix any validation errors it reports.
 7. Show the user `stories.md` for review before seeding. Pause for approval.
 
 **Zero-Assumption Story Template (use in `stories.yaml`):**
@@ -114,13 +114,32 @@ stories:
       - "<exact task description text from tasks.md>"
 ```
 
+### Phase 1b — Classify the project (optional but recommended)
+
+Before seeding, register the project in the graph so changes are linked to their owning repository with classification metadata. All writes go through the Neo4j MCP Cypher tool.
+
+1. **Derive the canonical project name** from the repository's git `origin`:
+   - Normalize the origin URL to lowercase `host/owner/repo`, preserving subgroups (`host/owner/group/repo`); strip scheme, userinfo, port, `.git` suffix, trailing slashes, query strings, and fragments. Accept HTTPS (`https://host/owner/repo[.git]`), SSH scp-style (`git@host:owner/repo[.git]`), and SSH URL (`ssh://[user@]host[:port]/owner/repo[.git]`) forms.
+   - If `origin` is absent or unparseable (no host, no path, fewer than two path segments, or no matching form), fall back to lowercase `local/<repo-directory-name>` and prefer setting `origin` so the name becomes canonical.
+   - The same repository always yields the same project name; pass it as `--project <project-name>` to `generate`.
+2. **Derive the classification facts** from the repository:
+   - `type`: one of `tooling`, `agent`, or `docs`, from the README's intent; write `null` when not derivable (clears a previous value).
+   - `techStack`: lowercase list of runtime/language names from manifests (`package.json`, `deps.edn`, `Cargo.toml`, `pyproject.toml`) and directory layout; deduplicate, sort alphabetically, and normalize aliases (`js`/`javascript` → `javascript`, `ts`/`typescript` → `typescript`, `py` → `python`). Record both runtimes and languages when present (e.g. `["node", "typescript"]`).
+   - `repoUrl`: sanitized origin — strip userinfo, query strings, and fragments; keep `https://host/owner/repo` (retaining any `.git` suffix) for HTTPS origins; convert SSH origins to HTTPS on known forges (github.com, gitlab.com, bitbucket.org); otherwise omit `repoUrl`. Never store credentials.
+3. **Write the classification** with full-overwrite semantics (all three derived properties set every run; values no longer derivable written as `null` to clear them):
+
+   ```cypher
+   MERGE (p:Project {name: "<project-name>"})
+   SET p.repoUrl = "<url>", p.techStack = ["clojure", "js"], p.type = "tooling";
+   ```
+
 ### Phase 2 — Seed the story graph
 
 Decide whether to seed or resume:
 
 ```cypher
-// Seed only if no run is in progress
-MATCH (c:Change {name: "<name>"})-[:HAS_STORY]->(s:Story)
+// Seed only if no run is in progress for this change in this project
+MATCH (c:Change {name: "<name>", project: "<project-name>"})-[:HAS_STORY]->(s:Story)
 WHERE s.status IN ["in_progress", "done"]
 RETURN count(s) > 0 AS runInProgress
 ```
@@ -132,9 +151,9 @@ RETURN count(s) > 0 AS runInProgress
 
 Repeat until complete or blocked:
 
-1. **Poll** for the next runnable story (deterministic, lowest `id` first):
+1. **Poll** for the next runnable story (deterministic, lowest `id` first, scoped to the change's project):
    ```cypher
-   MATCH (c:Change {name: "<name>"})-[:HAS_STORY]->(s:Story)
+   MATCH (c:Change {name: "<name>", project: "<project-name>"})-[:HAS_STORY]->(s:Story)
    WHERE s.status = "pending"
      AND NOT EXISTS {
        MATCH (s)-[:DEPENDS_ON]->(d:Story)
@@ -145,14 +164,14 @@ Repeat until complete or blocked:
 2. **No runnable story:** run the blocked/complete check (Phase 4).
 3. **Mark in progress:**
    ```cypher
-   MATCH (s:Story {id: "<story-id>", change: "<name>"})
+   MATCH (s:Story {id: "<story-id>", change: "<name>", project: "<project-name>"})
    SET s.status = "in_progress"
    ```
 4. **Implement** the story. Read its full `description` from the graph; it is fully-specified, so implement without making assumptions. If the description is ambiguous, PAUSE and ask — do not guess. Keep changes minimal and scoped.
 5. **Verify** each acceptance criterion against the implementation.
 6. **Mark done** and synchronize:
    ```cypher
-   MATCH (s:Story {id: "<story-id>", change: "<name>"})
+   MATCH (s:Story {id: "<story-id>", change: "<name>", project: "<project-name>"})
    SET s.status = "done"
    ```
    Then sync the task checkboxes:
@@ -171,7 +190,7 @@ Repeat until complete or blocked:
 When no story is runnable:
 
 ```cypher
-MATCH (c:Change {name: "<name>"})-[:HAS_STORY]->(s:Story)
+MATCH (c:Change {name: "<name>", project: "<project-name>"})-[:HAS_STORY]->(s:Story)
 WITH count(s) AS total,
      count(CASE WHEN s.status = "done" THEN 1 END) AS done
 RETURN total, done, total - done AS remaining
@@ -183,20 +202,24 @@ RETURN total, done, total - done AS remaining
 ## Graph Model Reference
 
 ```
-(:Change {name: string})
+(:Project {name: string, repoUrl: string?, techStack: [string]?, type: string?})
+(:Change {name: string, project: string})
 (:Story {
   id: string,                  // kebab-case, unique within change
+  change: string,
+  project: string,
   title: string,
   description: string,         // fully-specified, zero-assumption
   acceptanceCriteria: [string],// max 3
   status: string,              // pending | in_progress | done
   taskRefs: [string]           // task descriptions this story covers
 })
+(:Project)-[:BELONGS_TO]->(:Change)
 (:Change)-[:HAS_STORY]->(:Story)
 (:Story)-[:DEPENDS_ON]->(:Story)  // A DEPENDS_ON B => A requires B first
 ```
 
-Readiness rule: a story is runnable when `status = pending` and none of its `DEPENDS_ON` targets have a status other than `done`.
+Readiness rule: a story is runnable when `status = pending` and none of its `DEPENDS_ON` targets have a status other than `done`. All queries must be scoped to the change's project: `Change` matches use `{name, project}`, and `Story` matches use `{id, change, project}`.
 
 ## Guardrails
 

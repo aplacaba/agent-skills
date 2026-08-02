@@ -79,7 +79,7 @@ bb <repo>/scripts/story_driver.clj <command> ...
 ```
 
 - `parse-tasks <tasks.md> [--json]`
-- `generate <change> [--root <changeRoot>] [--def <stories.yaml>]`
+- `generate <change> --project <name> [--root <changeRoot>] [--def <stories.yaml>]`
 - `sync-tasks <change> <storyId> [--root <changeRoot>] [--def <stories.yaml>]`
 - `append-state <change> <text> [--root <changeRoot>]`
 
