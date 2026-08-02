@@ -46,8 +46,10 @@ The post-ops is resumable: a re-run determines its starting point from the repos
    - closed-unmerged matching pull request → ask the user to reopen it or create a new one; if the user declines both options, stop the post-ops and retain the worktree;
    - forge unreachable or not pull-request-capable → warn, report the pushed branch (name + URL if derivable), tell the user to open the pull request manually, continue;
    - multiple distinct push identities, or a head-repository host different from the base-repository host (cross-forge) → stop and retain the worktree pending configuration resolution, then re-run.
+5. **Remove the worktree** (final cleanup, from the main checkout) — `git worktree remove <path>`; it refuses on a dirty tree. This runs only after commit, push, and pull-request resolution (created, found, or explicitly handed off for manual follow-up). A refusal is non-blocking: warn, report the handoff as complete, and leave the worktree for the user or a later re-run. The branch refs (local and remote) are never deleted by the archive flow; they remain until the pull request merges.
+6. **Report** — report the pull request URL and status, and remind the user that merging happens through the pull request.
 
-(Worktree removal and resume dispatch are defined below.)
+(Resume dispatch is defined below.)
 
 **Steps**
 
