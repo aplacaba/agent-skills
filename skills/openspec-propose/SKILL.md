@@ -52,13 +52,24 @@ These three procedures are the single source of truth for the worktree-per-chang
 
    **IMPORTANT**: Do NOT proceed without understanding what the user wants to build.
 
-2. **Create the change directory**
+2. **Create the change worktree (worktree-per-change convention)**
+
+   Run the shared preflight, then resolve the default branch (from the selected remote's HEAD via `git ls-remote --symref <remote> HEAD`, falling back to the first existing local `master`/`main`, else stop and ask). Verify the main checkout is on that default branch; if not, stop and ask the user. Then create the worktree:
+
+   ```bash
+   git fetch <remote> <base>
+   git worktree add -b change/<name> .worktrees/<name> FETCH_HEAD
+   ```
+
+   If branch `change/<name>` already exists (re-propose/resume), use `git worktree add .worktrees/<name> change/<name>` instead. The main checkout is never switched. When the convention is inactive, warn once and skip all git steps — all further steps then run in the current checkout.
+
+3. **Create the change directory** (inside the worktree)
    ```bash
    openspec new change "<name>"
    ```
    This creates a scaffolded change in the planning home resolved by the CLI with `.openspec.yaml`.
 
-3. **Get the artifact build order**
+4. **Get the artifact build order**
    ```bash
    openspec status --change "<name>" --json
    ```
@@ -99,7 +110,18 @@ These three procedures are the single source of truth for the worktree-per-chang
       - Use **question tool** to clarify
       - Then continue with creation
 
-5. **Show final status**
+5. **Commit the proposal on the change branch**
+
+   Run the shared preflight again, then stage **only** the change directory and commit:
+
+   ```bash
+   git add openspec/changes/<name>/
+   git commit -m "chore(openspec): propose change <name>"
+   ```
+
+   All commits include a body explaining why. When the convention is inactive, skip this step.
+
+6. **Show final status**
    ```bash
    openspec status --change "<name>"
    ```
