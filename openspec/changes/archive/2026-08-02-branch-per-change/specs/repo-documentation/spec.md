@@ -4,7 +4,7 @@
 
 Adds the two root-level documentation files `README.md` and `AGENTS.md` that describe the project, its prerequisites, install flow, story-driven workflow, layout, and the binding conventions for AI agents. TBD: future documentation content will extend this capability.
 
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Root README for humans
 
@@ -53,3 +53,11 @@ The repo SHALL have a root-level `AGENTS.md` that states the binding conventions
 
 - **WHEN** the conventions in `AGENTS.md` are checked against the repo history and canonical content
 - **THEN** the commit subject pattern and examples match actual commits, the no-proposal rule matches the observed repository pattern, the branching strategy matches the worktree-per-change workflow, and the stated script/test invocations and MCP note match the current repo state
+
+## REMOVED Requirements
+
+### Requirement: Existing files unchanged
+
+**Reason**: The worktree-per-change change intentionally modifies `README.md` and `AGENTS.md` (and the skills) to document and enforce the new git workflow, so the constraint that the documentation change must not modify any existing file no longer holds.
+
+**Migration**: `README.md` and `AGENTS.md` are now living documents updated by the derived-fact rule; the "Existing files unchanged" constraint is replaced by the fact-update rule in "Root AGENTS.md with working conventions".

@@ -41,11 +41,28 @@ For Claude Code and Codex install steps, see [Install](docs/install.md).
    by an agent, verified against its acceptance criteria, and its tasks are
    checked off.
 4. **Archive** — `/opsx-archive` syncs the delta specs into the main specs and
-   moves the change into `openspec/changes/archive/`.
+   moves the change into `openspec/changes/archive/`, then pushes the change
+   branch and opens a pull request against the default branch.
 
 The mechanical parts (parsing tasks, validating story definitions, generating
 `stories.md` + `story-seed.cypher`, toggling task checkboxes, appending state)
 are handled by the babashka script `scripts/story_driver.clj`.
+
+## Branching strategy
+
+Proposed changes use a worktree-per-change git workflow:
+
+- Each proposed OpenSpec change gets its own worktree at `.worktrees/<name>/`
+  on branch `change/<name>`, created when the change is proposed. All change
+  work happens inside the worktree; the main checkout stays on the default
+  branch and is never switched.
+- The default branch receives proposed-change commits only when the change's
+  pull request merges (bug fixes are exempt and commit directly on the default
+  branch).
+- The archive step commits remaining work, pushes the change branch, opens a
+  pull request against the default branch, and removes the worktree. The
+  branch is kept until the pull request merges; merging happens through the
+  pull request, not in the archive flow.
 
 ## Repository layout
 
@@ -56,6 +73,7 @@ are handled by the babashka script `scripts/story_driver.clj`.
 | `agents/` | The openspec change reviewer agent |
 | `scripts/` | Babashka helper scripts (`story_driver.clj`, `config-merge.clj`) + test suites |
 | `docs/` | [Install](docs/install.md) and [harness tool mapping](docs/harness-mapping.md) |
+| `.worktrees/` | Per-change git worktrees (gitignored) |
 | `openspec/specs/` | Main OpenSpec specifications |
 | `openspec/changes/` | Active changes; `archive/` holds completed ones |
 | `.opencode/` | opencode adapter (plugin + command/agent symlinks) |

@@ -15,6 +15,14 @@ Implement tasks from an OpenSpec change.
 
 **Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
 
+**Worktree enforcement**
+
+This skill follows the worktree-per-change convention using the shared git helpers defined in the propose skill (convention detection, shared preflight, ensure-worktree):
+
+- Before starting: run the shared preflight, then ensure-worktree for the change at `.worktrees/<name>/`. When the convention is inactive, warn once and skip the git steps. When the worktree is missing in a convention-active repository, STOP and report — never create it late and never fall back to the main checkout.
+- All change work happens inside the worktree; every path is relative to the worktree root.
+- The shared preflight runs again immediately before every commit (a commit must never complete a pre-existing merge/rebase/cherry-pick/revert).
+
 **Steps**
 
 1. **Select the change**

@@ -22,6 +22,7 @@ The repo is distributed via thin per-harness adapters that reference the canonic
 | file edit | `edit` tool | Edit | Edit |
 | shell / bash | `bash` tool | Bash | Bash |
 | Cypher MCP tool | the Neo4j MCP server's Cypher tool | the Neo4j MCP server's Cypher tool | the Neo4j MCP server's Cypher tool |
+| pull-request tool | `gh pr create` (GitHub CLI) | `gh pr create` / forge web UI | `gh pr create` / forge web UI |
 
 ## Notes
 
