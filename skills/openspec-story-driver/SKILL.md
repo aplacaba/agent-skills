@@ -14,7 +14,7 @@ Run an OpenSpec change through a story graph stored in Neo4j, accessed via the o
 
 **Store selection:** If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one, run `openspec store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`). Other commands do not take the flag. Hints printed by commands already carry the flag; keep it on follow-ups. Without a store, commands act on the nearest local `openspec/` root.
 
-**Input**: Optionally specify a change name (e.g., `/opsx-story add-auth`). If omitted, infer from conversation or `openspec list --json`. Announce "Using change: <name>".
+**Input**: Optionally specify a change name (e.g., `/opsx-story add-auth`). If omitted, infer from conversation or `openspec list --json`. Announce "Using change: <name>". Optionally pass `--auto` to run the loop without pausing for confirmation between stories (interactive confirmation remains the default).
 
 ## Prerequisites
 
@@ -183,7 +183,7 @@ Repeat until complete or blocked:
    bb <repo>/scripts/story_driver.clj append-state "<name>" "<story-id>: <one-line summary of what changed and key decisions>" --root <changeRoot>
    ```
 7. **Compact context.** You are about to move to a new story. Compress the current session context (drop implementation details that are recorded in `.story-state.md`). Before polling the next story, reload the state summary from `<changeRoot>/.story-state.md`.
-8. **Confirm with the user** before starting the next story. Report what completed and what is next. If the user says continue, return to step 1; otherwise stop here.
+8. **Confirm with the user** before starting the next story. Report what completed and what is next. If the run was started with `--auto`, skip the confirmation and continue to the next story automatically; all other stops (Phase 1 `stories.md` approval, ambiguity, MCP failure, blocked, complete) still apply. If the user says continue, return to step 1; otherwise stop here.
 
 ### Phase 4 — Blocked and complete detection
 
@@ -224,6 +224,7 @@ Readiness rule: a story is runnable when `status = pending` and none of its `DEP
 ## Guardrails
 
 - Verify MCP reachability before any action; never proceed silently into a broken state.
+- Confirmation between stories applies in interactive mode only; `--auto` skips it (the loop still stops on ambiguity, MCP failure, blocked runs, and completion).
 - Stories must have at most 3 acceptance criteria and zero-assumption descriptions; pause if a story is ambiguous rather than guessing.
 - `taskRefs` across all stories must cover every `tasks.md` task exactly once.
 - Never seed over an in-progress run; resume the existing graph state instead.
