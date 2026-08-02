@@ -40,8 +40,14 @@ The post-ops is resumable: a re-run determines its starting point from the repos
    - the concrete file paths named in the change's `tasks.md` — validated with `git ls-files --error-unmatch` (tracked) or existence (untracked); paths that do not exist are skipped and reported, never passed to `git add`.
    Any other dirty path triggers a prompt with three continuations: (a) approve — stage it, mark it user-approved in the report; (b) decline — stop the post-ops and report (the archive itself is already complete); (c) exclude — the user commits or stashes it manually, then re-runs. If the tree is clean, skip the commit. Commit with `chore(openspec): archive change <name>` (body explaining why).
 3. **Push** — push `change/<name>` to every effective push endpoint (from the pins), then verify the branch exists at the pushed tip on EVERY pinned endpoint; a verification failure stops the flow before the pull-request step and removal. With no remote configured, skip the push, the pull-request step, and the worktree removal with a warning and report the local state (the worktree stays for the user).
+4. **Pull request** (forge-side, does not need the worktree) — open the pull request `change/<name>` → base branch via the forge's pull-request tool (see `docs/harness-mapping.md`), against the base repository (fetch endpoint) and head repository (effective push endpoint). Deduplication tuple: head branch `change/<name>` in the head repository, base branch = the resolved base branch in the base repository. Outcomes:
+   - open matching pull request → report its URL, create no duplicate, continue;
+   - merged matching pull request → report it as merged, continue (handoff complete; branch presence waived);
+   - closed-unmerged matching pull request → ask the user to reopen it or create a new one; if the user declines both options, stop the post-ops and retain the worktree;
+   - forge unreachable or not pull-request-capable → warn, report the pushed branch (name + URL if derivable), tell the user to open the pull request manually, continue;
+   - multiple distinct push identities, or a head-repository host different from the base-repository host (cross-forge) → stop and retain the worktree pending configuration resolution, then re-run.
 
-(Pull-request step, worktree removal, and resume dispatch are defined below.)
+(Worktree removal and resume dispatch are defined below.)
 
 **Steps**
 
