@@ -47,6 +47,29 @@ Examples:
 - `feat(scripts): port story-driver CLI to babashka`
 - `docs: update references from Python story-driver to babashka`
 
+## Branching strategy
+
+Each proposed OpenSpec change works in a dedicated git worktree at
+`.worktrees/<name>/` on branch `change/<name>`:
+
+- The worktree and branch are created at propose time, before any change
+  artifact is written, and the main checkout is never switched; it stays on
+  the default branch.
+- All work for a change (proposal artifacts, implementation commits, spec
+  syncs) happens inside its worktree.
+- The default branch receives proposed-change commits only when the change's
+  pull request merges. Bug fixes (which require no proposal) are exempt and
+  may be committed directly on the default branch.
+- The archive step performs the post-archive git steps: commit remaining
+  work, push the change branch to the remote, open a pull request against the
+  default branch, and remove the worktree. The branch (local and remote) is
+  kept until the pull request merges; the archive flow never merges it.
+- The `openspec-propose`, `openspec-apply-change`, `openspec-sync-specs`, and
+  `openspec-archive-change` skills enforce this convention: they create the
+  worktree, verify change work happens inside it, and run the post-archive
+  handoff, warning and skipping git steps in repositories that do not adopt
+  this convention.
+
 ## Harness-neutral canonical content
 
 Canonical content in `skills/`, `commands/`, and `agents/` must not contain
@@ -64,6 +87,7 @@ opencode-specific tool names). Use generic wording (e.g. "the question tool",
 | `agents/` | Agent definitions (e.g. openspec reviewer) |
 | `scripts/` | Babashka helper scripts + tests |
 | `docs/` | Install and harness tool mapping |
+| `.worktrees/` | Per-change git worktrees (gitignored) |
 | `openspec/specs/` | Main specifications |
 | `openspec/changes/` | Active and archived changes |
 | `setup.sh` | Global opencode installer |
