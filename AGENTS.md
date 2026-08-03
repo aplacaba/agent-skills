@@ -115,8 +115,16 @@ bb scripts/test_config_merge.clj
 ```
 
 The Neo4j MCP server runs via the `mcp/neo4j-cypher` Docker image (stdio
-transport), configured by `setup.sh`/`scripts/config-merge.clj` from
-`NEO4J_URI`, `NEO4J_USER`, and `NEO4J_PASSWORD`.
+transport). For opencode it is configured by `setup.sh`/`scripts/config-merge.clj`
+from `NEO4J_URI`, `NEO4J_USER`, and `NEO4J_PASSWORD`. For Claude Code it ships in
+the repo-root `.mcp.json`, which resolves `NEO4J_URI`, `NEO4J_USERNAME`,
+`NEO4J_PASSWORD`, and `NEO4J_DATABASE` from the environment at launch — never
+commit credentials into that file. Codex is covered by neither and needs the
+server registered by hand (see `docs/install.md`). Name it `neo4j` in every
+harness, since the story-driver skill refers to it by that name. Claude Code
+namespaces plugin-bundled servers, so there it is addressed as
+`plugin:openspec-tooling:neo4j` with tools named
+`mcp__plugin_openspec-tooling_neo4j__<tool>`.
 
 ## Documentation facts
 

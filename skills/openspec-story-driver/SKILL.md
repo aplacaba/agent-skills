@@ -2,7 +2,7 @@
 name: openspec-story-driver
 description: Drive OpenSpec change implementation through a story graph in Neo4j. Decompose a change into fully-specified stories (max 3 acceptance criteria each), seed them into Neo4j via the Neo4j MCP server, then continuously poll for the next runnable story, implement it, compact context, and repeat until the change is complete.
 license: MIT
-compatibility: Requires openspec CLI and the Neo4j MCP server configured in opencode.
+compatibility: Requires openspec CLI and a Neo4j MCP server registered as `neo4j` in the host harness (opencode, Claude Code, or Codex).
 metadata:
   author: openspec
   version: "1.0"
@@ -26,8 +26,11 @@ docker run -d --name story-neo4j \
   neo4j:latest
 ```
 
-### Neo4j MCP server in opencode config
-Add to your opencode config (e.g. `opencode.json` or `~/.config/opencode/opencode.json`):
+### Neo4j MCP server
+
+The server must be registered under the name `neo4j` in whichever harness you are running. It is not bundled with the plugin adapters — see [docs/install.md](../../docs/install.md) for the full per-harness detail.
+
+**opencode** — add to `opencode.json` or `~/.config/opencode/opencode.json` (`setup.sh` merges this for you):
 
 ```jsonc
 {
@@ -48,7 +51,15 @@ Add to your opencode config (e.g. `opencode.json` or `~/.config/opencode/opencod
 }
 ```
 
-Restart opencode after adding the MCP server. All graph access in this skill goes through the `neo4j` MCP server's Cypher execution tool — never shell out to a driver.
+**Claude Code** — bundled with the plugin via `.mcp.json`; it starts automatically. Export the credentials it reads:
+
+```bash
+export NEO4J_URI=bolt://localhost:7687
+export NEO4J_USERNAME=neo4j
+export NEO4J_PASSWORD=storypass
+```
+
+Restart the harness after adding the MCP server. All graph access in this skill goes through the `neo4j` MCP server's Cypher execution tool (`read_neo4j_cypher` / `write_neo4j_cypher`) — never shell out to a driver. In Claude Code the plugin-bundled server is namespaced, so those tools appear as `mcp__plugin_openspec-tooling_neo4j__read_neo4j_cypher` and `…__write_neo4j_cypher`.
 
 ### Helper script
 `story_driver.clj` (in the repo scripts/ directory) performs the mechanical parts: parsing tasks, validating the story definition, generating `stories.md` and `story-seed.cypher`, toggling task checkboxes, and appending state. Run it as `bb <repo>/scripts/story_driver.clj <command> ...`.
@@ -63,7 +74,7 @@ Before anything else, confirm the Neo4j MCP server is reachable by executing a t
 RETURN 1 AS ok
 ```
 
-- **If unreachable:** print setup guidance (the Docker command and opencode MCP config snippet above), then STOP. Do not modify any files.
+- **If unreachable:** print setup guidance (the Docker command and the MCP config snippet for the current harness, above), then STOP. Do not modify any files.
 
 ### Phase 1 — Decompose the change into stories
 
