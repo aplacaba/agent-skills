@@ -28,7 +28,9 @@ and the opencode plugin into `~/.config/opencode/`, and merges a Neo4j MCP
 server block into your opencode config. It is safe to re-run. Restart opencode
 afterwards, then use the `/opsx-*` commands.
 
-For Claude Code and Codex install steps, see [Install](docs/install.md).
+For Claude Code and Codex install steps, see [Install](docs/install.md). The
+Claude Code plugin bundles the Neo4j MCP server via `.mcp.json`; it reads
+credentials from the `NEO4J_*` environment variables rather than shipping them.
 
 ## How the story-driven workflow works
 
@@ -78,6 +80,7 @@ Proposed changes use a worktree-per-change git workflow:
 | `openspec/changes/` | Active changes; `archive/` holds completed ones |
 | `.opencode/` | opencode adapter (plugin + command/agent symlinks) |
 | `.claude-plugin/` | Claude Code adapter manifest |
+| `.mcp.json` | Neo4j MCP server shipped with the Claude Code plugin |
 | `.codex-plugin/` | Codex adapter manifest |
 | `setup.sh` | Global installer for opencode |
 
