@@ -1,6 +1,6 @@
 {
   "name": "openspec-tooling",
-  "description": "OpenSpec agent tooling: openspec workflow skills (propose/apply/archive/explore/sync), the story-driven apply workflow backed by a Neo4j story graph, and the openspec change reviewer agent.",
+  "description": "OpenSpec agent tooling: openspec workflow skills (propose/apply/archive/explore/sync), the story-driven apply workflow backed by an Obsidian-vault story graph, and the openspec change reviewer agent.",
   "version": "0.1.0",
   "author": {
     "name": "tovarisch"
@@ -12,7 +12,7 @@
     "spec-driven",
     "skills",
     "workflow",
-    "neo4j",
-    "story-driven"
+    "story-driven",
+    "obsidian"
   ]
 }
