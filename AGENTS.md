@@ -95,36 +95,35 @@ opencode-specific tool names). Use generic wording (e.g. "the question tool",
 ## Scripts and tests
 
 Story-driven mechanics (parsing tasks, validating story definitions,
-generating `stories.md` + `story-seed.cypher`, toggling task checkboxes,
-appending state):
+generating `stories.md` + vault notes, polling for the next runnable story,
+setting statuses, classifying projects, toggling task checkboxes, appending
+state):
 
 ```bash
 bb <repo>/scripts/story_driver.clj <command> ...
 ```
 
 - `parse-tasks <tasks.md> [--json]`
-- `generate <change> --project <name> [--root <changeRoot>] [--def <stories.yaml>]`
+- `generate <change> --project <name> [--root <changeRoot>] [--def <stories.yaml>] [--vault <path>]`
+- `next <change> --project <name> [--vault <path>]`
+- `set-status <change> <storyId> <status> --project <name> [--vault <path>]`
+- `classify <project> [--type <t>] [--tech-stack <a,b>] [--repo-url <u>] [--vault <path>]`
 - `sync-tasks <change> <storyId> [--root <changeRoot>] [--def <stories.yaml>]`
 - `append-state <change> <text> [--root <changeRoot>]`
 
-Run the test suites from the repo root:
+Run the test suite from the repo root:
 
 ```bash
 bb scripts/test_story_driver.clj
-bb scripts/test_config_merge.clj
 ```
 
-The Neo4j MCP server runs via the `mcp/neo4j-cypher` Docker image (stdio
-transport). For opencode it is configured by `setup.sh`/`scripts/config-merge.clj`
-from `NEO4J_URI`, `NEO4J_USER`, and `NEO4J_PASSWORD`. For Claude Code it ships in
-the repo-root `.mcp.json`, which resolves `NEO4J_URI`, `NEO4J_USERNAME`,
-`NEO4J_PASSWORD`, and `NEO4J_DATABASE` from the environment at launch — never
-commit credentials into that file. Codex is covered by neither and needs the
-server registered by hand (see `docs/install.md`). Name it `neo4j` in every
-harness, since the story-driver skill refers to it by that name. Claude Code
-namespaces plugin-bundled servers, so there it is addressed as
-`plugin:openspec-tooling:neo4j` with tools named
-`mcp__plugin_openspec-tooling_neo4j__<tool>`.
+The story graph lives in an Obsidian vault of markdown notes (`Stories/` +
+`Projects/`), resolved via the `OBSIDIAN_VAULT` environment variable (default
+`~/obsidian/obsidian`) or the `--vault` flag. No MCP server is required. If a
+harness registers an Obsidian MCP server (e.g. `obsidian-mcp@2` with the vault
+allowlisted), the story-driver skill uses its read tools for note reads; every
+write goes through `story_driver.clj`. See `docs/install.md` for per-harness
+registration and `docs/harness-mapping.md` for tool names.
 
 ## Documentation facts
 

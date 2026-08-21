@@ -4,10 +4,9 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # openspec-tooling setup for opencode
 # Installs the canonical skills/commands/agents/plugin into the global opencode
-# config (~/.config/opencode) and merges the Neo4j MCP server block.
+# config (~/.config/opencode).
 #
-# Safe to re-run: symlinks are refreshed, the config merge is idempotent, and
-# a backup of opencode.json(.c) is written before any edit.
+# Safe to re-run: symlinks are refreshed.
 # ---------------------------------------------------------------------------
 
 # Allow overriding the global opencode config dir for testing.
@@ -35,7 +34,6 @@ check_cmd() {
 
 check_cmd bb     "install babashka (https://babashka.org)" || missing_hard=1
 check_cmd openspec "install via: npm i -g openspec" || missing_hard=1
-check_cmd docker  "install Docker (https://docs.docker.com/get-docker/)" || missing_hard=1
 check_cmd git     "install git (https://git-scm.com)" || missing_hard=1
 
 if [ "$missing_hard" -eq 1 ]; then
@@ -92,18 +90,16 @@ symlink "$REPO_ROOT/.opencode/plugins/openspec-tooling.js" \
         "$OPENCODE_CONFIG_DIR/plugins/openspec-tooling.js"
 
 # ---------------------------------------------------------------------------
-# 3. Neo4j MCP config merge (idempotent, with backup)
+# 3. Story-graph vault guidance
 # ---------------------------------------------------------------------------
-say "==> Merging Neo4j MCP config"
+say "==> Story-graph vault"
 
-if [ -z "${NEO4J_PASSWORD:-}" ]; then
-  warn "NEO4J_PASSWORD not set — skipping Neo4j MCP merge (set it and re-run)"
+VAULT="${OBSIDIAN_VAULT:-$HOME/obsidian/obsidian}"
+if [ ! -d "$VAULT" ]; then
+  warn "vault not found at $VAULT — story-driven apply will fail until you"
+  warn "  create it or set OBSIDIAN_VAULT to an existing vault"
 else
-  NEO4J_URI="${NEO4J_URI:-bolt://localhost:7687}" \
-  NEO4J_USER="${NEO4J_USER:-neo4j}" \
-  NEO4J_PASSWORD="$NEO4J_PASSWORD" \
-  OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" \
-  bb "$REPO_ROOT/scripts/config-merge.clj"
+  say "  [ok] vault: $VAULT"
 fi
 
 # ---------------------------------------------------------------------------
@@ -112,6 +108,11 @@ fi
 cat <<EOF
 
 ==> opencode is installed. Restart opencode to pick up the changes.
+
+==> Story graph storage:
+  The story-driven workflow stores stories as markdown notes in an Obsidian
+  vault (OBSIDIAN_VAULT, default $HOME/obsidian/obsidian). No database or MCP
+  server is required; an Obsidian MCP server may be registered for read access.
 
 ==> Other harnesses (install separately):
 
@@ -124,5 +125,5 @@ cat <<EOF
     openspec-tooling
     Install Plugin
 
-  See docs/install.md for details and the Neo4j MCP env vars.
+  See docs/install.md for details.
 EOF

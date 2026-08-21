@@ -5,9 +5,15 @@
 Subcommands:
   parse-tasks <tasks.md> [--json]
       Parse an OpenSpec tasks.md into a structured list of task groups/tasks.
-  generate <change> [--root <changeRoot>] [--def <stories.yaml>]
-      Read a story definition, validate it, and write stories.md +
-      story-seed.cypher into the change root.
+  generate <change> [--root <changeRoot>] [--def <stories.yaml>] --project <name> [--vault <path>]
+      Read a story definition, validate it, and write stories.md into the
+      change root plus story notes into the Obsidian vault.
+  next <change> --project <name> [--vault <path>]
+      Print the next runnable story as JSON (plus counts/blocked/in-progress).
+  set-status <change> <storyId> <status> --project <name> [--vault <path>]
+      Rewrite a story note's status frontmatter field.
+  classify <project> [--type <t>] [--tech-stack <a,b>] [--repo-url <u>] [--vault <path>]
+      Write project classification frontmatter.
   sync-tasks <change> <storyId> [--root <changeRoot>] [--def <stories.yaml>]
       Mark the tasks referenced by a story as done in tasks.md.
   append-state <change> <text> [--root <changeRoot>]
@@ -20,7 +26,9 @@ Subcommands:
 (def prog "story_driver.clj")
 
 (def subcommands
-  ["parse-tasks" "generate" "sync-tasks" "append-state"])
+  ["parse-tasks" "generate" "next" "set-status" "classify" "sync-tasks" "append-state"])
+
+(def valid-statuses #{"pending" "in_progress" "done"})
 
 (defn errln [s]
   (binding [*out* *err*]
@@ -37,6 +45,107 @@ Subcommands:
 
 (defn default-change-root [change root]
   (if root root (str "openspec/changes/" change)))
+
+;; ---------------------------------------------------------------------------
+;; Vault resolution, slugs, atomic writes, frontmatter
+;; ---------------------------------------------------------------------------
+
+(defn resolve-vault [flag]
+  (or flag
+      (System/getenv "OBSIDIAN_VAULT")
+      (str (System/getenv "HOME") "/obsidian/obsidian")))
+
+(defn check-vault! [vault]
+  (let [f (java.io.File. vault)]
+    (when-not (.isDirectory f)
+      (die (str "vault root not found: " vault " (set OBSIDIAN_VAULT or pass --vault)")))
+    (when-not (.canWrite f)
+      (die (str "vault root not writable: " vault)))))
+
+(defn slug [s]
+  (-> (str s)
+      str/lower-case
+      str/trim
+      (str/replace #"[^a-z0-9._-]+" "-")
+      (str/replace #"-{2,}" "-")
+      (str/replace #"^-|-$" "")))
+
+(defn atomic-spit [path content]
+  (let [f (java.io.File. path)]
+    (when-not (.exists (.getParentFile f))
+      (.mkdirs (.getParentFile f)))
+    (let [tmp (str path ".tmp-" (System/nanoTime))
+          to (.toPath f)
+          from (.toPath (java.io.File. tmp))]
+      (spit tmp content :encoding "UTF-8")
+      (try
+        (java.nio.file.Files/move from to
+          (into-array java.nio.file.CopyOption
+                      [java.nio.file.StandardCopyOption/REPLACE_EXISTING
+                       java.nio.file.StandardCopyOption/ATOMIC_MOVE]))
+        (catch Exception e
+          (if (str/includes? (str e) "Atomic move not supported")
+            (java.nio.file.Files/move from to
+              (into-array java.nio.file.CopyOption
+                          [java.nio.file.StandardCopyOption/REPLACE_EXISTING]))
+            (throw e)))))))
+
+(defn split-frontmatter [content]
+  "Returns {:fm {...} :body \"...\"} or nil when the note has no frontmatter.
+  The body is the exact text after the closing --- line."
+  (let [lines (str/split content #"\n" -1)]
+    (when (= "---" (first lines))
+      (let [rest-lines (vec (rest lines))
+            closing-idx (first (keep-indexed (fn [i l] (when (= "---" l) i)) rest-lines))]
+        (when closing-idx
+          (let [fm-text (str/join "\n" (take closing-idx rest-lines))
+                parsed (try (yaml/parse-string fm-text) (catch Exception _ nil))]
+            {:fm (if (map? parsed) parsed {})
+             :body (str/join "\n" (drop (inc closing-idx) rest-lines))}))))))
+
+(defn yaml-scalar [v]
+  (cond
+    (string? v) (json/generate-string v {:escape-non-ascii false})
+    (or (sequential? v) (map? v) (nil? v) (number? v) (boolean? v))
+    (json/generate-string v {:escape-non-ascii false})
+    :else (json/generate-string (str v) {:escape-non-ascii false})))
+
+(defn emit-note [fm body]
+  (str "---\n"
+       (str/join "\n" (map (fn [[k v]] (str (name k) ": " (yaml-scalar v))) fm))
+       "\n---\n"
+       body))
+
+(defn read-note [path]
+  (when (.isFile (java.io.File. path))
+    (split-frontmatter (slurp path :encoding "UTF-8"))))
+
+(defn note-status [note]
+  (str (or (:status (:fm note)) "pending")))
+
+(defn section [body name]
+  "Returns the text of body's '## <name>' section (without the header line), or nil."
+  (let [pat (re-pattern (str "(?m)^## " (java.util.regex.Pattern/quote name) "[ \\t]*\n"))
+        m (re-find pat body)]
+    (when m
+      (let [start (+ (.indexOf body m) (count m))
+            rest (subs body start)
+            next-h (.indexOf rest "\n## ")]
+        (subs rest 0 (if (neg? next-h) (count rest) next-h))))))
+
+(defn bullets [s]
+  (->> (str/split s #"\n" -1)
+       (keep #(when-let [m (re-matches #"^-\s+(.+)$" %)] (second m)))))
+
+(defn dep-ids [body]
+  (into #{} (map (fn [[_ link]]
+                   (let [[path alias] (str/split link #"\|" 2)]
+                     (if alias alias (last (str/split path #"/"))))))
+        (re-seq (re-pattern "- \\[\\[([^\\]]+)\\]\\]") body)))
+
+(defn description-portion [body]
+  (let [idx (.indexOf body "\n## ")]
+    (str/trim (if (neg? idx) body (subs body 0 idx)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Python-compatible helpers
@@ -185,12 +294,6 @@ Subcommands:
 ;; generate
 ;; ---------------------------------------------------------------------------
 
-(defn cypher-str [v]
-  (json/generate-string v {:escape-non-ascii false}))
-
-(defn cypher-arr [items]
-  (str "[" (str/join ", " (map cypher-str items)) "]"))
-
 (defn write-stories-md [stories change root]
   (let [lines (atom [(str "# Stories — " change)
                      ""
@@ -211,45 +314,189 @@ Subcommands:
       (swap! lines conj ""))
     (spit (str root "/stories.md") (str/join "\n" @lines) :encoding "UTF-8")))
 
-(defn write-seed [stories change project root]
-  (let [parts (atom [(str "// Story graph seed for change")
-                     (str "// change: " (cypher-str change))
-                     (str "// project: " (cypher-str project))
-                     "// Idempotent: each statement uses MERGE; safe to re-run."
-                     (str "MERGE (p:Project {name: " (cypher-str project) "});")
-                     (str "MERGE (c:Change {name: " (cypher-str change)
-                          ", project: " (cypher-str project) "});")
-                     (str "MATCH (p:Project {name: " (cypher-str project) "}),")
-                     (str "      (c:Change {name: " (cypher-str change)
-                          ", project: " (cypher-str project) "})")
-                     "MERGE (p)-[:BELONGS_TO]->(c);"])]
+(defn merge-changes-link [body p-slug c-slug change]
+  (let [line (str "- [[Stories/" p-slug "/" c-slug "/_change|" change "]]")]
+    (if (str/includes? body line)
+      body
+      (let [m (re-find #"(?m)^## Changes[ \t]*$" body)]
+        (if m
+          (let [pos (+ (.indexOf body m) (count m))
+                before (subs body 0 pos)
+                after (subs body pos)]
+            (str before "\n" line after))
+          (str body
+               (when-not (str/ends-with? body "\n") "\n")
+               "\n## Changes\n" line "\n"))))))
+
+(defn write-story-note [vault p-slug c-slug s change project]
+  (let [path (str vault "/Stories/" p-slug "/" c-slug "/" (slug (str (:id s))) ".md")
+        existing (read-note path)
+        status (note-status existing)]
+    (when-not (contains? valid-statuses status)
+      (die (str "corrupted status '" status "' in " path)))
+    (let [deps (vec (:dependsOn s))
+          body (str (str/trim (:description s)) "\n\n"
+                    (when (seq (:acceptanceCriteria s))
+                      (str "## Acceptance criteria\n"
+                           (str/join "\n" (map #(str "- " %) (:acceptanceCriteria s)))
+                           "\n\n"))
+                    (when (seq deps)
+                      (str "## Depends on\n"
+                           (str/join "\n" (map (fn [d] (str "- [[Stories/" p-slug "/" c-slug "/" (slug (str d)) "|" d "]]")) deps))
+                           "\n\n"))
+                    (when (seq (:taskRefs s))
+                      (str "## Tasks\n"
+                           (str/join "\n" (map #(str "- " %) (:taskRefs s)))
+                           "\n")))
+          fm (array-map :id (str (:id s)) :title (:title s) :change change
+                        :project project :status status)]
+      (atomic-spit path (emit-note fm body)))))
+
+(defn write-change-note [vault p-slug c-slug change project stories]
+  (let [path (str vault "/Stories/" p-slug "/" c-slug "/_change.md")
+        existing (read-note path)]
+    (when (and existing
+               (or (not= (str (:name (:fm existing))) (str change))
+                   (not= (str (:project (:fm existing))) (str project))))
+      (die (str "change slug collision: '" change "' vs existing '"
+                (:name (:fm existing)) "' at " path)))
+    (let [fm (array-map :name change :project project)
+          body (str "# " change "\n\n## Stories\n"
+                    (str/join "\n" (map (fn [s] (str "- [[" (slug (str (:id s))) "|" (:title s) "]]")) stories))
+                    "\n")]
+      (atomic-spit path (emit-note fm body)))))
+
+(defn write-project-note [vault project p-slug c-slug change]
+  (let [path (str vault "/Projects/" p-slug ".md")
+        existing (read-note path)]
+    (when (and existing (not= (str (:name (:fm existing))) (str project)))
+      (die (str "project slug collision: '" project "' vs existing '"
+                (:name (:fm existing)) "' at " path)))
+    (let [fm (if existing
+               (assoc (:fm existing) :name project)
+               (array-map :name project :type nil :techStack nil :repoUrl nil))
+          body (if existing
+                 (merge-changes-link (:body existing) p-slug c-slug change)
+                 (merge-changes-link (str "# " project "\n") p-slug c-slug change))]
+      (atomic-spit path (emit-note fm body)))))
+
+(defn write-vault-notes [stories change project vault]
+  (let [p-slug (slug project)
+        c-slug (slug change)]
+    (write-change-note vault p-slug c-slug change project stories)
     (doseq [s stories]
-      (swap! parts conj "")
-      (swap! parts conj (str "MERGE (s:Story {id: " (cypher-str (:id s))
-                             ", change: " (cypher-str change)
-                             ", project: " (cypher-str project) "})"))
-      (swap! parts conj (str "ON CREATE SET s.title = " (cypher-str (:title s))
-                             ", s.description = " (cypher-str (str/trim (:description s)))
-                             ", s.acceptanceCriteria = " (cypher-arr (:acceptanceCriteria s))
-                             ", s.taskRefs = " (cypher-arr (:taskRefs s))
-                             ", s.status = \"pending\";"))
-      (swap! parts conj (str "MATCH (c:Change {name: " (cypher-str change)
-                             ", project: " (cypher-str project) "}),"))
-      (swap! parts conj (str "      (s:Story {id: " (cypher-str (:id s))
-                             ", change: " (cypher-str change)
-                             ", project: " (cypher-str project) "})"))
-      (swap! parts conj "MERGE (c)-[:HAS_STORY]->(s);"))
-    (doseq [s stories]
-      (doseq [dep (:dependsOn s)]
-        (swap! parts conj "")
-        (swap! parts conj (str "MATCH (a:Story {id: " (cypher-str (:id s))
-                               ", change: " (cypher-str change)
-                               ", project: " (cypher-str project) "})"))
-        (swap! parts conj (str "MATCH (b:Story {id: " (cypher-str dep)
-                               ", change: " (cypher-str change)
-                               ", project: " (cypher-str project) "})"))
-        (swap! parts conj "MERGE (a)-[:DEPENDS_ON]->(b);")))
-    (spit (str root "/story-seed.cypher") (str/join "\n" @parts) :encoding "UTF-8")))
+      (write-story-note vault p-slug c-slug s change project))
+    (write-project-note vault project p-slug c-slug change)))
+
+;; ---------------------------------------------------------------------------
+;; next / set-status / classify
+;; ---------------------------------------------------------------------------
+
+(declare parse-args)
+
+(defn guard-change-folder! [vault p-slug c-slug change project]
+  (let [dir (str vault "/Stories/" p-slug "/" c-slug)]
+    (when-not (.isDirectory (java.io.File. dir))
+      (die (str "change folder not found: " dir " (run generate first)")))
+    (let [cn (read-note (str dir "/_change.md"))]
+      (when (and cn
+                 (or (not= (str (:name (:fm cn))) (str change))
+                     (not= (str (:project (:fm cn))) (str project))))
+        (die (str "change slug collision: '" change "' vs existing '"
+                  (:name (:fm cn)) "' at " dir))))
+    dir))
+
+(defn cmd-next [args]
+  (let [{:keys [positionals opts]} (parse-args "next" args)
+        change (first positionals)
+        project (:project opts)
+        vault (resolve-vault (:vault opts))]
+    (check-vault! vault)
+    (let [dir (guard-change-folder! vault (slug project) (slug change) change project)
+          files (->> (file-seq (java.io.File. dir))
+                     (filter #(and (.isFile %)
+                                   (str/ends-with? (.getName %) ".md")
+                                   (not= (.getName %) "_change.md")))
+                     (map (fn [f]
+                            (let [n (read-note (.getPath f))
+                                  name (re-find #"([^/]+)\.md$" (.getPath f))]
+                              {:id (or (:id (:fm n)) (second name))
+                               :fm (:fm n)
+                               :body (:body n)})))
+                     (sort-by :id)
+                     vec)]
+      (doseq [f files]
+        (when-not (contains? valid-statuses (note-status f))
+          (die (str "corrupted status '" (note-status f) "' in story note '" (:id f) "'"))))
+      (let [statuses (into {} (map (fn [f] [(:id f) (note-status f)]) files))
+            runnable? (fn [f]
+                        (and (= "pending" (note-status f))
+                             (every? #(= "done" (statuses % "pending"))
+                                     (dep-ids (:body f)))))
+            runnable (first (filter runnable? files))
+            done (count (filter #(= "done" (note-status %)) files))
+            in-progress (filter #(= "in_progress" (note-status %)) files)
+            pending (filter #(= "pending" (note-status %)) files)
+            blocked (->> pending (remove runnable?) (mapv :id))
+            out {:runnable (when runnable
+                             (array-map
+                              :id (:id runnable)
+                              :title (:title (:fm runnable))
+                              :description (description-portion (:body runnable))
+                              :acceptanceCriteria (vec (bullets (or (section (:body runnable) "Acceptance criteria") "")))
+                              :taskRefs (vec (bullets (or (section (:body runnable) "Tasks") "")))))
+                 :counts {:total (count files)
+                          :done done
+                          :inProgress (count in-progress)
+                          :pending (count pending)
+                          :remaining (- (count files) done)}
+                 :blocked blocked
+                 :inProgressIds (mapv :id in-progress)}]
+        (println (json/generate-string out {:escape-non-ascii false}))))))
+
+(defn cmd-set-status [args]
+  (let [{:keys [positionals opts]} (parse-args "set-status" args)
+        change (first positionals)
+        story-id (second positionals)
+        status (nth positionals 2)
+        project (:project opts)
+        vault (resolve-vault (:vault opts))]
+    (check-vault! vault)
+    (when-not (contains? valid-statuses status)
+      (die (str "invalid status '" status "' (choose from pending, in_progress, done)")))
+    (let [dir (guard-change-folder! vault (slug project) (slug change) change project)
+          path (str dir "/" (slug story-id) ".md")
+          note (read-note path)]
+      (when-not note
+        (die (str "story note not found: " path)))
+      (when (or (not= (str (:change (:fm note))) (str change))
+                (not= (str (:project (:fm note))) (str project)))
+        (die (str "story note identity mismatch: '" story-id "' belongs to change '"
+                  (:change (:fm note)) "' project '" (:project (:fm note)) "'")))
+      (atomic-spit path (emit-note (assoc (:fm note) :status status) (:body note)))
+      (println (str "set status " status " for " story-id)))))
+
+(defn cmd-classify [args]
+  (let [{:keys [positionals opts]} (parse-args "classify" args)
+        project (first positionals)
+        vault (resolve-vault (:vault opts))
+        p-slug (slug project)
+        path (str vault "/Projects/" p-slug ".md")]
+    (check-vault! vault)
+    (let [existing (read-note path)]
+      (when (and existing (not= (str (:name (:fm existing))) (str project)))
+        (die (str "project slug collision: '" project "' vs existing '"
+                  (:name (:fm existing)) "' at " path)))
+      (let [tech (when (seq (:tech-stack opts))
+                   (vec (map str/trim (str/split (:tech-stack opts) #","))))
+            fm (-> (or (:fm existing) (array-map :name project))
+                   (assoc :name project
+                          :type (or (:type opts) nil)
+                          :techStack (or tech nil)
+                          :repoUrl (or (:repo-url opts) nil)))
+            body (if existing (:body existing) (str "# " project "\n"))]
+        (atomic-spit path (emit-note fm body))
+        (println (str "classified " project))))))
 
 ;; ---------------------------------------------------------------------------
 ;; sync-tasks / append-state
@@ -295,13 +542,19 @@ Subcommands:
 
 (def sub-usage
   {"parse-tasks"  (str "usage: " prog " parse-tasks [-h] tasks [--json]")
-   "generate"     (str "usage: " prog " generate [-h] change [--root ROOT] [--def DEF] --project PROJECT")
+   "generate"     (str "usage: " prog " generate [-h] change [--root ROOT] [--def DEF] --project PROJECT [--vault VAULT]")
+   "next"         (str "usage: " prog " next [-h] change --project PROJECT [--vault VAULT]")
+   "set-status"   (str "usage: " prog " set-status [-h] change story_id status --project PROJECT [--vault VAULT]")
+   "classify"     (str "usage: " prog " classify [-h] project [--type TYPE] [--tech-stack LIST] [--repo-url URL] [--vault VAULT]")
    "sync-tasks"   (str "usage: " prog " sync-tasks [-h] change story_id [--root ROOT] [--def DEF]")
    "append-state" (str "usage: " prog " append-state [-h] change text [--root ROOT]")})
 
 (def sub-help
   {"parse-tasks"  "Parse an OpenSpec tasks.md into a structured list of task groups/tasks."
-   "generate"     "Read a story definition, validate it, and write stories.md + story-seed.cypher into the change root."
+   "generate"     "Read a story definition, validate it, and write stories.md + vault story notes."
+   "next"         "Print the next runnable story as JSON (with counts, blocked and in-progress ids)."
+   "set-status"   "Rewrite a story note's status frontmatter field (pending, in_progress, done)."
+   "classify"     "Write project classification frontmatter (type, techStack, repoUrl)."
    "sync-tasks"   "Mark the tasks referenced by a story as done in tasks.md."
    "append-state" "Append a compact summary line to <changeRoot>/.story-state.md."})
 
@@ -311,9 +564,15 @@ Subcommands:
        "Subcommands:\n"
        "  parse-tasks <tasks.md> [--json]\n"
        "      Parse an OpenSpec tasks.md into a structured list of task groups/tasks.\n"
-       "  generate <change> [--root <changeRoot>] [--def <stories.yaml>] --project <name>\n"
+       "  generate <change> [--root <changeRoot>] [--def <stories.yaml>] --project <name> [--vault <path>]\n"
        "      Read a story definition, validate it, and write stories.md +\n"
-       "      story-seed.cypher into the change root (scoped to the project).\n"
+       "      vault story notes into the Obsidian vault (scoped to the project).\n"
+       "  next <change> --project <name> [--vault <path>]\n"
+       "      Print the next runnable story as JSON (plus counts/blocked/in-progress).\n"
+       "  set-status <change> <storyId> <status> --project <name> [--vault <path>]\n"
+       "      Rewrite a story note's status frontmatter field.\n"
+       "  classify <project> [--type <t>] [--tech-stack <a,b>] [--repo-url <u>] [--vault <path>]\n"
+       "      Write project classification frontmatter.\n"
        "  sync-tasks <change> <storyId> [--root <changeRoot>] [--def <stories.yaml>]\n"
        "      Mark the tasks referenced by a story as done in tasks.md.\n"
        "  append-state <change> <text> [--root <changeRoot>]\n"
@@ -333,12 +592,19 @@ Subcommands:
 (defn parse-args [sub args]
   "Parse per-subcommand args. Returns {:positionals [...] :opts {...}} or exits with usage."
   (let [spec {"parse-tasks"  {:flags #{:json} :positionals ["tasks"] :npos 1}
-              "generate"     {:flags #{:root :def :project} :positionals ["change"] :npos 1}
+              "generate"     {:flags #{:root :def :project :vault} :positionals ["change"] :npos 1}
+              "next"         {:flags #{:project :vault} :positionals ["change"] :npos 1}
+              "set-status"   {:flags #{:project :vault} :positionals ["change" "story_id" "status"] :npos 3}
+              "classify"     {:flags #{:type :tech-stack :repo-url :vault} :positionals ["project"] :npos 1}
               "sync-tasks"   {:flags #{:root :def} :positionals ["change" "story_id"] :npos 2}
               "append-state" {:flags #{:root} :positionals ["change" "text"] :npos 2}}
         {:keys [flags positionals npos]} (spec sub)
-        flag-tokens {"--json" :json "--root" :root "--def" :def "--project" :project}
-        required-flags {"generate" #{:project}}]
+        flag-tokens {"--json" :json "--root" :root "--def" :def "--project" :project
+                     "--vault" :vault "--type" :type "--tech-stack" :tech-stack
+                     "--repo-url" :repo-url}
+        required-flags {"generate" #{:project}
+                        "next" #{:project}
+                        "set-status" #{:project}}]
     (loop [toks args, pos [], opts {}]
       (if (empty? toks)
         (do
@@ -401,16 +667,18 @@ Subcommands:
         root (default-change-root change (:root opts))
         def-path (:def opts)
         def-path (if def-path def-path (str root "/stories.yaml"))
-        tasks-path (str root "/tasks.md")]
+        tasks-path (str root "/tasks.md")
+        vault (resolve-vault (:vault opts))]
+    (check-vault! vault)
     (when-not (.exists (java.io.File. tasks-path))
       (die (str "tasks.md not found: " tasks-path)))
     (let [tasks (:all (parse-tasks tasks-path))
           stories (load-stories def-path change)]
       (validate-stories stories tasks)
       (write-stories-md stories change root)
-      (write-seed stories change project root)
+      (write-vault-notes stories change project vault)
       (println (str "wrote " root "/stories.md"))
-      (println (str "wrote " root "/story-seed.cypher")))))
+      (println (str "wrote vault notes for " change " (project " project ")")))))
 
 (defn cmd-sync [args]
   (let [{:keys [positionals opts]} (parse-args "sync-tasks" args)
@@ -447,6 +715,9 @@ Subcommands:
     (case (first args)
       "parse-tasks" (cmd-parse-tasks (rest args))
       "generate" (cmd-generate (rest args))
+      "next" (cmd-next (rest args))
+      "set-status" (cmd-set-status (rest args))
+      "classify" (cmd-classify (rest args))
       "sync-tasks" (cmd-sync (rest args))
       "append-state" (cmd-append (rest args)))))
 
