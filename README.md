@@ -3,9 +3,11 @@
 OpenSpec agent tooling for AI coding harnesses: the OpenSpec workflow skills
 (`/opsx-*` commands), a story-driven apply workflow backed by an Obsidian-vault
 story graph, and an openspec change reviewer agent. The content is distributed from
-one canonical root (`skills/`, `commands/`, `agents/`, `scripts/`) to three
-harnesses — **opencode**, **Claude Code**, and **Codex** — via thin adapters, so
-there is no duplicated content and no cross-harness drift.
+one canonical root (`skills/`, `commands/`, `agents/`, `scripts/`) to four
+harnesses — **opencode**, **Claude Code**, **Codex**, and **Pi** — via thin
+adapters, except Pi, which needs no adapter: Pi implements the Agent Skills
+standard and discovers `skills/` by convention directory. There is no duplicated
+content and no cross-harness drift.
 
 ## Prerequisites
 
@@ -30,9 +32,10 @@ and the opencode plugin into `~/.config/opencode/`, and verifies the
 story-graph vault. It is safe to re-run. Restart opencode afterwards, then use
 the `/opsx-*` commands.
 
-For Claude Code and Codex install steps, see [Install](docs/install.md). No
+For Claude Code, Codex, and Pi install steps, see [Install](docs/install.md). No
 harness bundles an MCP server; register an Obsidian MCP yourself if you want
-read tools.
+read tools (Pi has no MCP support — the story-driven skill reads vault files
+directly).
 
 ## How the story-driven workflow works
 
@@ -88,7 +91,7 @@ Proposed changes use a worktree-per-change git workflow:
 
 ## Documentation
 
-- [Install](docs/install.md) — full install for all three harnesses, story-graph
+- [Install](docs/install.md) — full install for all four harnesses, story-graph
   vault setup, optional Obsidian MCP, uninstall.
 - [Harness tool mapping](docs/harness-mapping.md) — how the generic tool
   wording in canonical content maps to each harness's concrete tools.

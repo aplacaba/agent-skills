@@ -88,11 +88,44 @@ Install Plugin
 
 For a local repo path, register it via the app's Plugins sidebar or `codex plugin add <abs/path/to/repo>`.
 
+## Pi
+
+[Pi](https://github.com/earendil-works/pi-coding-agent) (`pi`) implements the Agent Skills standard and discovers skills from the repo's `skills/` convention directory — no adapter files, no manifest, no MCP wiring. Validated against Pi **0.84.3**; check yours with:
+
+```bash
+pi --version
+```
+
+Install from a local path:
+
+```bash
+pi install /path/to/this/repo
+```
+
+or from a git source:
+
+```bash
+pi install https://github.com/aplacaba/agent-skills.git
+```
+
+After `pi install`, the `openspec-*` skills are loaded from the installed repo. List them with `pi skill list`.
+
+**Prerequisites**: same as the top-level list (babashka, OpenSpec CLI, git, an Obsidian vault) plus the `pi` binary itself on PATH.
+
+**Story graph vault**: resolved identically — `--vault <path>` flag or `OBSIDIAN_VAULT` environment variable, falling back to `~/obsidian/obsidian` (see [Story graph storage](#story-graph-storage)).
+
+**Pi constraints**:
+
+- **No MCP server support** — the optional Obsidian MCP is never registered on Pi. The story-driven skill reads vault files via its file-read fallback; every write still goes through `scripts/story_driver.clj`.
+- **No subagent delegation or plan mode** — the reviewer-agent concept does not apply on Pi; review stages run directly in the Pi session.
+- **No `/opsx-*` command aliases** — `commands/` is opencode-only. Pi users invoke the `openspec-*` skills directly.
+
 ## Verifying the install
 
 - **opencode**: restart opencode, then ask it to list skills or run `/opsx-story`. The story-driven skill's Phase 0 verifies the vault; if you registered an Obsidian MCP, confirm it appears in the MCP list.
 - **Claude Code**: `/plugin` shows `openspec-tooling`; the `openspec-*` skills and `/opsx-*` commands are available.
 - **Codex**: the `openspec-*` skills are discoverable.
+- **Pi**: `pi skill list` shows the `openspec-*` skills; the story-driven skill's Phase 0 verifies the vault (no MCP — file reads only).
 
 ## Uninstall
 
@@ -104,4 +137,12 @@ rm -f ~/.config/opencode/plugins/openspec-tooling.js \
 rm -rf ~/.config/opencode/skill/openspec-* ~/.config/opencode/command/opsx-*
 ```
 
-For Claude Code, `/plugin uninstall openspec-tooling@openspec-tooling-dev` removes the plugin. If you registered an Obsidian MCP separately, drop it with the harness's own MCP removal command. The vault notes themselves are yours to keep or delete.
+For Claude Code, `/plugin uninstall openspec-tooling@openspec-tooling-dev` removes the plugin. If you registered an Obsidian MCP separately, drop it with the harness's own MCP removal command.
+
+For Pi, `pi list` prints the installed sources (e.g. `../../projects/my-agent-skill` or the git URL); remove with:
+
+```bash
+pi remove <source>
+```
+
+(or the `pi uninstall <source>` alias). The vault notes themselves are yours to keep or delete.

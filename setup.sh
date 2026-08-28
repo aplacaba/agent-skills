@@ -127,3 +127,15 @@ cat <<EOF
 
   See docs/install.md for details.
 EOF
+
+if command -v pi >/dev/null 2>&1; then
+  cat <<EOF
+
+  Pi (pi installed — skip if already added; check with \`pi list\`):
+    pi install $REPO_ROOT
+    pi install https://github.com/aplacaba/agent-skills.git   # git source
+
+  Skills are discovered by convention from the repo's skills/ directory; no
+  Pi adapter files are needed. See docs/install.md.
+EOF
+fi
