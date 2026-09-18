@@ -2,6 +2,7 @@
 description: OpenSpec Change Reviewer — critically reviews all change artifacts (proposal/design/specs/tasks) after propose and before apply
 mode: subagent
 model: openai/gpt-5.6-sol
+reasoningEffort: high
 tools:
  write: false
  edit: false
