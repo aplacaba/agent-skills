@@ -1,7 +1,7 @@
 {
   "name": "openspec-tooling",
   "version": "0.1.0",
-  "description": "OpenSpec agent tooling: openspec workflow skills, story-driven apply backed by an Obsidian-vault story graph, and the openspec change reviewer agent.",
+  "description": "OpenSpec agent tooling: the story-driven apply workflow backed by an Obsidian-vault story graph, and the openspec change reviewer agent.",
   "author": {
     "name": "tovarisch"
   },

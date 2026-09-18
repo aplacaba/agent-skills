@@ -64,11 +64,9 @@ Each proposed OpenSpec change works in a dedicated git worktree at
   work, push the change branch to the remote, open a pull request against the
   default branch, and remove the worktree. The branch (local and remote) is
   kept until the pull request merges; the archive flow never merges it.
-- The `openspec-propose`, `openspec-apply-change`, `openspec-sync-specs`, and
-  `openspec-archive-change` skills enforce this convention: they create the
-  worktree, verify change work happens inside it, and run the post-archive
-  handoff, warning and skipping git steps in repositories that do not adopt
-  this convention.
+- This convention is executed manually by the agent following this file — no
+  bundled skill enforces it, and the stock per-repo `openspec init` workflow
+  does not automate worktrees.
 
 ## Harness-neutral canonical content
 
@@ -82,9 +80,9 @@ opencode-specific tool names). Use generic wording (e.g. "the question tool",
 
 | Path | Contents |
 |---|---|
-| `skills/` | Canonical skills |
-| `commands/` | Canonical `/opsx-*` command definitions |
-| `agents/` | Agent definitions (e.g. openspec reviewer) |
+| `skills/` | Canonical skills (story-driven apply) |
+| `commands/` | Canonical `/opsx-story` command definition |
+| `agents/` | Agent definitions (the openspec reviewer) |
 | `scripts/` | Babashka helper scripts + tests |
 | `docs/` | Install and harness tool mapping |
 | `.worktrees/` | Per-change git worktrees (gitignored) |

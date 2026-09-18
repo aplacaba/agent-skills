@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "openspec-tooling",
-      "description": "OpenSpec agent tooling: openspec workflow skills, story-driven apply, and the change reviewer agent.",
+      "description": "OpenSpec agent tooling: story-driven apply (Obsidian vault) and the change reviewer agent.",
       "version": "0.1.0",
       "source": "./",
       "author": {

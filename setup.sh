@@ -6,7 +6,7 @@ set -euo pipefail
 # Installs the canonical skills/commands/agents/plugin into the global opencode
 # config (~/.config/opencode).
 #
-# Safe to re-run: symlinks are refreshed.
+# Safe to re-run: symlinks are refreshed and stale links pruned.
 # ---------------------------------------------------------------------------
 
 # Allow overriding the global opencode config dir for testing.
@@ -89,6 +89,17 @@ symlink "$REPO_ROOT/agents/openspec-reviewer.md" \
 symlink "$REPO_ROOT/.opencode/plugins/openspec-tooling.js" \
         "$OPENCODE_CONFIG_DIR/plugins/openspec-tooling.js"
 
+# Prune links from older installs whose repo-side target no longer exists.
+# Resolving links and real files/dirs are never touched.
+for link in "$OPENCODE_CONFIG_DIR"/skill/openspec-* \
+            "$OPENCODE_CONFIG_DIR"/command/opsx-*; do
+  [ -L "$link" ] || continue
+  if [ ! -e "$link" ]; then
+    rm -f "$link"
+    say "  prune $link (target no longer exists)"
+  fi
+done
+
 # ---------------------------------------------------------------------------
 # 3. Story-graph vault guidance
 # ---------------------------------------------------------------------------
@@ -108,6 +119,12 @@ fi
 cat <<EOF
 
 ==> opencode is installed. Restart opencode to pick up the changes.
+
+==> Stock OpenSpec workflow:
+  The propose/apply/archive/sync/explore skills and their /opsx-* commands
+  are not installed globally. Run \`openspec init --tools opencode\` in each
+  repository to get them; this repo ships only the /opsx-story command and
+  the reviewer agent on top.
 
 ==> Story graph storage:
   The story-driven workflow stores stories as markdown notes in an Obsidian

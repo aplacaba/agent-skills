@@ -1,13 +1,14 @@
 # openspec-tooling
 
-OpenSpec agent tooling for AI coding harnesses: the OpenSpec workflow skills
-(`/opsx-*` commands), a story-driven apply workflow backed by an Obsidian-vault
-story graph, and an openspec change reviewer agent. The content is distributed from
-one canonical root (`skills/`, `commands/`, `agents/`, `scripts/`) to four
-harnesses — **opencode**, **Claude Code**, **Codex**, and **Pi** — via thin
-adapters, except Pi, which needs no adapter: Pi implements the Agent Skills
-standard and discovers `skills/` by convention directory. There is no duplicated
-content and no cross-harness drift.
+OpenSpec agent tooling for AI coding harnesses: an openspec change reviewer
+agent and a story-driven apply workflow backed by an Obsidian-vault story
+graph. The stock propose/apply/archive/sync/explore workflow is not bundled —
+run `openspec init --tools <harness>` in each repository to get it. What this
+repo does distribute comes from one canonical root (`skills/`, `commands/`,
+`agents/`, `scripts/`) to four harnesses — **opencode**, **Claude Code**,
+**Codex**, and **Pi** — via thin adapters, except Pi, which needs no adapter:
+Pi implements the Agent Skills standard and discovers `skills/` by convention
+directory. There is no duplicated content and no cross-harness drift.
 
 ## Prerequisites
 
@@ -28,9 +29,14 @@ Obsidian MCP server (e.g. `obsidian-mcp@2`) is optional and used for reads only.
 ```
 
 The script checks prerequisites, symlinks `skills/`, `commands/`, `agents/`,
-and the opencode plugin into `~/.config/opencode/`, and verifies the
-story-graph vault. It is safe to re-run. Restart opencode afterwards, then use
-the `/opsx-*` commands.
+and the opencode plugin into `~/.config/opencode/`, prunes stale links left by
+older installs, and verifies the story-graph vault. It is safe to re-run.
+Restart opencode afterwards, then run `/opsx-story`.
+
+**Upgrading from an older install:** re-run `./setup.sh` after pulling. It
+removes the stale global `/opsx-propose`, `/opsx-apply`, `/opsx-archive`,
+`/opsx-sync`, and `/opsx-explore` links; those commands now come from per-repo
+`openspec init`.
 
 For Claude Code, Codex, and Pi install steps, see [Install](docs/install.md). No
 harness bundles an MCP server; register an Obsidian MCP yourself if you want
@@ -39,17 +45,18 @@ directly).
 
 ## How the story-driven workflow works
 
-1. **Propose** — `/opsx-propose` creates a change with proposal, design, specs,
-   and tasks.
+1. **Propose** — the stock `/opsx-propose` (from per-repo `openspec init`)
+   creates a change with proposal, design, specs, and tasks.
 2. **Decompose** — `/opsx-story` turns the change's tasks into stories with
    acceptance criteria and dependencies, writes them into the Obsidian vault as
    markdown notes, and shows you `stories.md` for review.
-3. **Apply** — `/opsx-apply` works through the tasks; each story is implemented
-   by an agent, verified against its acceptance criteria, and its tasks are
-   checked off.
-4. **Archive** — `/opsx-archive` syncs the delta specs into the main specs and
-   moves the change into `openspec/changes/archive/`, then pushes the change
-   branch and opens a pull request against the default branch.
+3. **Apply** — `/opsx-story` implements each story, verifies it against its
+   acceptance criteria, checks off its tasks, and compacts context between
+   stories.
+4. **Archive** — the stock `/opsx-archive` syncs the delta specs into the main
+   specs and moves the change into `openspec/changes/archive/`; the worktree
+   handoff (commit, push, pull request, cleanup) is performed manually per
+   [AGENTS.md](AGENTS.md).
 
 The mechanical parts (parsing tasks, validating story definitions, generating
 `stories.md` + vault notes, polling for the next runnable story, setting
@@ -67,17 +74,18 @@ Proposed changes use a worktree-per-change git workflow:
 - The default branch receives proposed-change commits only when the change's
   pull request merges (bug fixes are exempt and commit directly on the default
   branch).
-- The archive step commits remaining work, pushes the change branch, opens a
-  pull request against the default branch, and removes the worktree. The
-  branch is kept until the pull request merges; merging happens through the
-  pull request, not in the archive flow.
+- The archive handoff — commit remaining work, push the change branch, open a
+  pull request against the default branch, and remove the worktree — is
+  performed manually by the agent following [AGENTS.md](AGENTS.md), not by a
+  bundled skill. The branch is kept until the pull request merges; merging
+  happens through the pull request, not in the archive flow.
 
 ## Repository layout
 
 | Path | Contents |
 |---|---|
-| `skills/` | Canonical skills (openspec workflow, propose, apply, archive, explore, sync, story driver) |
-| `commands/` | Canonical `/opsx-*` command definitions |
+| `skills/` | Canonical skills (story-driven apply) |
+| `commands/` | Canonical `/opsx-story` command definition |
 | `agents/` | The openspec change reviewer agent |
 | `scripts/` | Babashka helper scripts (`story_driver.clj`) + test suites |
 | `docs/` | [Install](docs/install.md) and [harness tool mapping](docs/harness-mapping.md) |

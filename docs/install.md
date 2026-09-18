@@ -1,6 +1,6 @@
 # Install
 
-This repo provides the OpenSpec agent tooling: openspec workflow skills, the story-driven apply workflow (backed by an Obsidian-vault story graph), and the openspec change reviewer agent. It is distributed via thin per-harness adapters from one canonical content root (`skills/`, `commands/`, `agents/`, `scripts/`).
+This repo provides the OpenSpec agent tooling: the story-driven apply workflow (backed by an Obsidian-vault story graph) and the openspec change reviewer agent. The stock propose/apply/archive/sync/explore workflow comes from per-repo `openspec init`. The content is distributed via thin per-harness adapters from one canonical content root (`skills/`, `commands/`, `agents/`, `scripts/`).
 
 ## Prerequisites
 
@@ -8,6 +8,16 @@ This repo provides the OpenSpec agent tooling: openspec workflow skills, the sto
 - OpenSpec CLI (`npm i -g openspec`)
 - Git
 - An Obsidian vault (a directory with an `.obsidian` folder). The story graph lives there as markdown notes; the app itself does not need to be running.
+
+## Stock OpenSpec workflow
+
+The propose/apply/archive/sync/explore skills and their `/opsx-*` commands are not distributed by this repo. Install them per repository with the OpenSpec CLI:
+
+```bash
+openspec init --tools <harness>   # opencode, claude, codex, or pi
+```
+
+The reviewer agent and the story-driven override layer on top of that stock workflow; the commands they reference (`/opsx-propose`, `/opsx-apply`, `/opsx-archive`) come from this per-repo initialization.
 
 ## Story graph storage
 
@@ -53,11 +63,11 @@ Run the setup script from the repo root:
 This:
 
 1. Checks prerequisites and prints install hints for anything missing.
-2. Symlinks `skills/`, `commands/`, `agents/`, and the opencode plugin into `~/.config/opencode/` so opencode discovers everything globally.
+2. Symlinks the canonical `skills/`, `commands/`, `agents/`, and the opencode plugin into `~/.config/opencode/`, and prunes stale links left by older installs.
 3. Verifies the story-graph vault (warns when the default `~/obsidian/obsidian` is missing; honor `OBSIDIAN_VAULT`).
 4. Prints Claude Code and Codex install guidance.
 
-The script is safe to re-run. If you move the repo, re-run it to refresh the absolute symlinks.
+The script is safe to re-run; re-run it after pulling an update. It refreshes the symlinks and removes links to skills/commands that no longer exist (the removed workflow skills and `/opsx-*` commands). If you move the repo, re-run it to refresh the absolute symlinks.
 
 After setup, **restart opencode** so the plugin, skills, commands, and agents load.
 
@@ -71,7 +81,7 @@ The repo's `.claude-plugin/marketplace.json` defines marketplace `openspec-tooli
 /plugin install openspec-tooling@openspec-tooling-dev
 ```
 
-Claude Code discovers `skills/`, `commands/`, and `agents/` from the plugin root. When the repo is pushed to GitHub, use the repo URL instead of the local path, or publish to the official marketplace.
+Claude Code discovers the `openspec-story-driver` skill, the `/opsx-story` command, and the `openspec-reviewer` agent from the plugin root. When the repo is pushed to GitHub, use the repo URL instead of the local path, or publish to the official marketplace. Re-install or update the plugin after pulling an update so copied installs drop removed files.
 
 The plugin ships no MCP server. The story-driven workflow reads and writes vault files directly; register an Obsidian MCP (above) only if you want read tools.
 
@@ -86,7 +96,7 @@ openspec-tooling    # search
 Install Plugin
 ```
 
-For a local repo path, register it via the app's Plugins sidebar or `codex plugin add <abs/path/to/repo>`.
+For a local repo path, register it via the app's Plugins sidebar or `codex plugin add <abs/path/to/repo>`. Codex ships the story-driven skill only (the manifest exposes `skills/`); re-install after pulling an update so copied installs drop removed files.
 
 ## Pi
 
@@ -108,7 +118,7 @@ or from a git source:
 pi install https://github.com/aplacaba/agent-skills.git
 ```
 
-After `pi install`, the `openspec-*` skills are loaded from the installed repo. List them with `pi skill list`.
+After `pi install`, the `openspec-story-driver` skill is loaded from the installed repo. List it with `pi skill list`. The stock workflow skills (`openspec-propose`, `openspec-apply-change`, and the rest) come from per-repo `openspec init --tools pi`.
 
 **Prerequisites**: same as the top-level list (babashka, OpenSpec CLI, git, an Obsidian vault) plus the `pi` binary itself on PATH.
 
@@ -118,14 +128,14 @@ After `pi install`, the `openspec-*` skills are loaded from the installed repo. 
 
 - **No MCP server support** — the optional Obsidian MCP is never registered on Pi. The story-driven skill reads vault files via its file-read fallback; every write still goes through `scripts/story_driver.clj`.
 - **No subagent delegation or plan mode** — the reviewer-agent concept does not apply on Pi; review stages run directly in the Pi session.
-- **No `/opsx-*` command aliases** — `commands/` is opencode-only. Pi users invoke the `openspec-*` skills directly.
+- **No `/opsx-*` command aliases** — `commands/` is opencode-only. Pi users invoke the story-driven skill directly; per-repo `openspec init --tools pi` supplies the stock workflow skills.
 
 ## Verifying the install
 
 - **opencode**: restart opencode, then ask it to list skills or run `/opsx-story`. The story-driven skill's Phase 0 verifies the vault; if you registered an Obsidian MCP, confirm it appears in the MCP list.
-- **Claude Code**: `/plugin` shows `openspec-tooling`; the `openspec-*` skills and `/opsx-*` commands are available.
-- **Codex**: the `openspec-*` skills are discoverable.
-- **Pi**: `pi skill list` shows the `openspec-*` skills; the story-driven skill's Phase 0 verifies the vault (no MCP — file reads only).
+- **Claude Code**: `/plugin` shows `openspec-tooling`; the `openspec-story-driver` skill, the `/opsx-story` command, and the `openspec-reviewer` agent are available.
+- **Codex**: the `openspec-story-driver` skill is discoverable.
+- **Pi**: `pi skill list` shows `openspec-story-driver`; the story-driven skill's Phase 0 verifies the vault (no MCP — file reads only).
 
 ## Uninstall
 
