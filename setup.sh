@@ -89,6 +89,10 @@ symlink "$REPO_ROOT/agents/openspec-reviewer.md" \
 symlink "$REPO_ROOT/.opencode/plugins/openspec-tooling.js" \
         "$OPENCODE_CONFIG_DIR/plugins/openspec-tooling.js"
 
+# rev-swap CLI (reviewer model preset switcher)
+mkdir -p "$HOME/.local/bin"
+symlink "$REPO_ROOT/scripts/rev_swap.clj" "$HOME/.local/bin/rev-swap"
+
 # Prune links from older installs whose repo-side target no longer exists.
 # Resolving links and real files/dirs are never touched.
 for link in "$OPENCODE_CONFIG_DIR"/skill/openspec-* \
