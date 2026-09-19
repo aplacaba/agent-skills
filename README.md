@@ -87,7 +87,7 @@ Proposed changes use a worktree-per-change git workflow:
 | `skills/` | Canonical skills (story-driven apply) |
 | `commands/` | Canonical `/opsx-story` command definition |
 | `agents/` | The openspec change reviewer agent |
-| `scripts/` | Babashka helper scripts (`story_driver.clj`) + test suites |
+| `scripts/` | Babashka helper scripts (`story_driver.clj`, `rev_swap.clj`) + test suites |
 | `docs/` | [Install](docs/install.md) and [harness tool mapping](docs/harness-mapping.md) |
 | `.worktrees/` | Per-change git worktrees (gitignored) |
 | `openspec/specs/` | Main OpenSpec specifications |

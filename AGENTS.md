@@ -109,11 +109,22 @@ bb <repo>/scripts/story_driver.clj <command> ...
 - `sync-tasks <change> <storyId> [--root <changeRoot>] [--def <stories.yaml>]`
 - `append-state <change> <text> [--root <changeRoot>]`
 
-Run the test suite from the repo root:
+Run the test suites from the repo root:
 
 ```bash
 bb scripts/test_story_driver.clj
+bb scripts/test_rev_swap.clj
 ```
+
+Reviewer-model preset switching (one-command swaps of `cheap`/`work`/`hybrid`
+across the opencode reviewer agent frontmatter and the codex `config.toml`):
+
+```bash
+bb <repo>/scripts/rev_swap.clj [cheap|work|hybrid]
+```
+
+No-arg invocation prints current settings; `-h` lists presets. `setup.sh`
+installs it as `~/.local/bin/rev-swap`.
 
 The story graph lives in an Obsidian vault of markdown notes (`Stories/` +
 `Projects/`), resolved via the `OBSIDIAN_VAULT` environment variable (default
